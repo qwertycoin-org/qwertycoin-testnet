@@ -1,0 +1,130 @@
+/*
+Copyright (c) 2016, Ruslan Baratov
+All rights reserved.
+*/
+
+/* Examples on GitHub */
+.rst-content .admonition-examples-on-github {
+  background-color: #dbfaf4 !important;
+  padding-bottom: 1px !important;
+}
+
+.rst-content .admonition-examples-on-github .admonition-title {
+  background-color: #1abc9c !important;
+}
+
+.rst-content .admonition-examples-on-github .admonition-title:before {
+  content:url('https://docs.hunter.sh/thirdpartylogos/octocat-16x16.png');
+}
+
+/* Examples on GitHub */
+.rst-content .admonition-github {
+  background-color: #dbfaf4 !important;
+  padding-bottom: 1px !important;
+}
+
+.rst-content .admonition-github .admonition-title {
+  background-color: #1abc9c !important;
+}
+
+.rst-content .admonition-github .admonition-title:before {
+  content:url('https://docs.hunter.sh/thirdpartylogos/octocat-16x16.png');
+}
+
+/* Stackoverflow */
+.rst-content .admonition-stackoverflow {
+  background-color: #dbfaf4 !important;
+  padding-bottom: 1px !important;
+}
+
+.rst-content .admonition-stackoverflow .admonition-title {
+  background-color: #1abc9c !important;
+}
+
+.rst-content .admonition-stackoverflow .admonition-title:before {
+  content:url('https://docs.hunter.sh/thirdpartylogos/stackoverflow-16x16.png');
+}
+
+/* CMake documentation */
+.rst-content .admonition-cmake-documentation {
+  background-color: #dbfaf4 !important;
+  padding-bottom: 1px !important;
+}
+
+.rst-content .admonition-cmake-documentation .admonition-title {
+  background-color: #1abc9c !important;
+}
+
+.rst-content .admonition-cmake-documentation .admonition-title:before {
+  content:url('https://docs.hunter.sh/thirdpartylogos/cmake-16x16.png');
+}
+
+/* CMake mailing list */
+.rst-content .admonition-cmake-mailing-list {
+  background-color: #dbfaf4 !important;
+  padding-bottom: 1px !important;
+}
+
+.rst-content .admonition-cmake-mailing-list .admonition-title {
+  background-color: #1abc9c !important;
+}
+
+.rst-content .admonition-cmake-mailing-list .admonition-title:before {
+  content:url('https://docs.hunter.sh/thirdpartylogos/cmake-16x16.png');
+}
+
+/* Wikipedia */
+.rst-content .admonition-wikipedia {
+  background-color: #dbfaf4 !important;
+  padding-bottom: 1px !important;
+}
+
+.rst-content .admonition-wikipedia .admonition-title {
+  background-color: #1abc9c !important;
+}
+
+.rst-content .admonition-wikipedia .admonition-title:before {
+  content:url('https://docs.hunter.sh/thirdpartylogos/wikipedia-16x16.png');
+}
+
+/* CGold */
+.rst-content .admonition-cgold {
+  background-color: #dbfaf4 !important;
+  padding-bottom: 1px !important;
+}
+
+.rst-content .admonition-cgold .admonition-title {
+  background-color: #1abc9c !important;
+}
+
+.rst-content .admonition-cgold .admonition-title:before {
+  content:url('https://docs.hunter.sh/thirdpartylogos/whale2-16x16.png');
+}
+
+/* Polly */
+.rst-content .admonition-polly {
+  background-color: #dbfaf4 !important;
+  padding-bottom: 1px !important;
+}
+
+.rst-content .admonition-polly .admonition-title {
+  background-color: #1abc9c !important;
+}
+
+.rst-content .admonition-polly .admonition-title:before {
+  content:url('https://docs.hunter.sh/thirdpartylogos/wrench-16x16.png');
+}
+
+/* Hunter */
+.rst-content .admonition-hunter {
+  background-color: #dbfaf4 !important;
+  padding-bottom: 1px !important;
+}
+
+.rst-content .admonition-hunter .admonition-title {
+  background-color: #1abc9c !important;
+}
+
+.rst-content .admonition-hunter .admonition-title:before {
+  content:url('https://docs.hunter.sh/thirdpartylogos/package-16x16.png');
+}
