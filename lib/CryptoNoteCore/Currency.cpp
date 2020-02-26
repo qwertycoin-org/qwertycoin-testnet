@@ -785,9 +785,6 @@ difficulty_type Currency::nextDifficultyV2(
 
     uint64_t nextDiffZ = low / timeSpan;
 
-    // minimum limit
-    if (!isTestnet() && nextDiffZ < 100000) {
-        nextDiffZ = 100000;
     }
 
     return nextDiffZ;
@@ -850,11 +847,6 @@ difficulty_type Currency::nextDifficultyV3(
     nextDifficulty = harmonic_mean_D * T / LWMA;
     next_difficulty = static_cast<uint64_t>(nextDifficulty);
 
-    // minimum limit
-    if (!isTestnet() && next_difficulty < 100000) {
-        next_difficulty = 100000;
-    }
-
     return next_difficulty;
 }
 
@@ -912,14 +904,6 @@ difficulty_type Currency::nextDifficultyV5(
     );
     if (sum_3_ST < (8 * T) / 10) {
         nextDiffV5 = (prev_D * 110ull) / 100ull;
-    }
-
-    // minimum limit
-    if (nextDiffV5 < 10000000) {
-        nextDiffV5 = 10000000;
-    }
-    if(isTestnet()){
-        nextDiffV5 = 10000;
     }
 
     return nextDiffV5;
