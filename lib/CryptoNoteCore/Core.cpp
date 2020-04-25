@@ -730,6 +730,17 @@ bool core::get_block_template(
         return false;
     }
 
+    uint32_t previousBlockHeight = 0;
+    uint64_t blockTarget = CryptoNote::parameters::DIFFICULTY_TARGET;
+
+    if (height >= CryptoNote::parameters::UPGRADE_HEIGHT_REWARD_SCHEME) {
+        getBlockHeight(b.previousBlockHash, previousBlockHeight);
+        uint64_t prev_timestamp = getBlockTimestamp(previousBlockHeight);
+        if(prev_timestamp >= b.timestamp)
+            return false;
+        blockTarget = b.timestamp - getBlockTimestamp(previousBlockHeight);
+    }
+
     // two-phase miner transaction generation: we don't know exact block size until we prepare
     // block, but we don't know reward until we know block size, so first miner transaction
     // generated with fake amount of money, and with phase we know think we know expected block size
@@ -745,7 +756,8 @@ bool core::get_block_template(
         adr,
         b.baseTransaction,
         ex_nonce,
-        14
+        14,
+        blockTarget
     );
     if (!r) {
         logger(ERROR, BRIGHT_RED) << "Failed to construct miner tx, first chance";
@@ -764,7 +776,8 @@ bool core::get_block_template(
             adr,
             b.baseTransaction,
             ex_nonce,
-            14
+            14,
+            blockTarget
         );
 
         if (!(r)) {
