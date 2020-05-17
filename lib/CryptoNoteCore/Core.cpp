@@ -641,11 +641,6 @@ bool core::get_block_template(
     {
         LockedBlockchainStorage blockchainLock(m_blockchain);
         height = m_blockchain.getCurrentBlockchainHeight();
-        diffic = m_blockchain.getDifficultyForNextBlock();
-        if (!(diffic)) {
-            logger(ERROR, BRIGHT_RED) << "difficulty overhead.";
-            return false;
-        }
 
         b = boost::value_initialized<Block>();
         b.majorVersion = m_blockchain.getBlockMajorVersionForHeight(height);
@@ -713,6 +708,12 @@ bool core::get_block_template(
             }
         }
 
+        diffic = m_blockchain.getDifficultyForNextBlock();
+        if (!(diffic)) {
+            logger(ERROR, BRIGHT_RED) << "difficulty overhead.";
+            return false;
+        }
+
         median_size = m_blockchain.getCurrentCumulativeBlocksizeLimit() / 2;
         already_generated_coins = m_blockchain.getCoinsInCirculation();
     }
@@ -727,6 +728,7 @@ bool core::get_block_template(
             txs_size,
             fee)
         ) {
+        logger(ERROR, BRIGHT_RED) << "failed to fill block template from mempool.";
         return false;
     }
 
@@ -736,8 +738,11 @@ bool core::get_block_template(
     if (height >= CryptoNote::parameters::UPGRADE_HEIGHT_REWARD_SCHEME) {
         getBlockHeight(b.previousBlockHash, previousBlockHeight);
         uint64_t prev_timestamp = getBlockTimestamp(previousBlockHeight);
-        if(prev_timestamp >= b.timestamp)
+        if(prev_timestamp >= b.timestamp) {
+            logger(ERROR, BRIGHT_RED) << "incorrect timestamp, prev = "
+               << prev_timestamp << ",  new = " << b.timestamp;
             return false;
+        }
         blockTarget = b.timestamp - getBlockTimestamp(previousBlockHeight);
     }
 
@@ -840,6 +845,11 @@ bool core::get_block_template(
     logger(ERROR, BRIGHT_RED) << "Failed to create_block_template with " << 10 << " tries";
 
     return false;
+}
+
+bool core::get_difficulty_stat(uint32_t height, IMinerHandler::stat_period period, uint32_t &block_num, uint64_t &avg_solve_time, uint64_t &stddev_solve_time, uint32_t &outliers_num)
+{
+    return m_blockchain.getDifficultyStat(height, period, block_num, avg_solve_time, stddev_solve_time, outliers_num);
 }
 
 std::vector<Crypto::Hash> core::findBlockchainSupplement(

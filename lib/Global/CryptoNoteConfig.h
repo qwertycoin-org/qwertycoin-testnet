@@ -113,9 +113,12 @@ const uint64_t EXPECTED_NUMBER_OF_BLOCKS_PER_DAY              = 24 * 60 * 60 / D
 const size_t   DIFFICULTY_WINDOW                              = EXPECTED_NUMBER_OF_BLOCKS_PER_DAY; // blocks
 const size_t   DIFFICULTY_WINDOW_V2                           = DIFFICULTY_WINDOW;  // blocks
 const size_t   DIFFICULTY_WINDOW_V3                           = 70;  // blocks
+const size_t   DIFFICULTY_WINDOW_V6                           = 30;  // EXPECTED_NUMBER_OF_BLOCKS_PER_DAY / 24
 const size_t   DIFFICULTY_CUT                                 = 60;  // timestamps to cut after sorting
 const size_t   DIFFICULTY_LAG                                 = 15;  // !!!
 static_assert(2 * DIFFICULTY_CUT <= DIFFICULTY_WINDOW - 2, "Bad DIFFICULTY_WINDOW or DIFFICULTY_CUT");
+const size_t DEFAULT_DIFFICULTY                               = 10000;
+const size_t FIXED_DIFFICULTY                                 = 0;
 
 static constexpr uint64_t POISSON_CHECK_TRIGGER               = 10;   // Reorg size that triggers poisson timestamp check
 static constexpr uint64_t POISSON_CHECK_DEPTH                 = 60;   // Main-chain depth of the poisson check. The attacker will have to tamper 50% of those blocks
@@ -136,12 +139,13 @@ const size_t   FUSION_TX_MAX_SIZE                             = CRYPTONOTE_BLOCK
 const size_t   FUSION_TX_MIN_INPUT_COUNT                      = 12;
 const size_t   FUSION_TX_MIN_IN_OUT_COUNT_RATIO               = 4;
 
-const uint32_t UPGRADE_HEIGHT_V2                              = 20;
-const uint32_t UPGRADE_HEIGHT_V3                              = 30;
-const uint32_t UPGRADE_HEIGHT_V4                              = 40;
-const uint32_t UPGRADE_HEIGHT_V5                              = 50;
-const uint32_t UPGRADE_HEIGHT_REWARD_SCHEME                   = 60;
-const uint32_t UPGRADE_HEIGHT_V6                              = 4294967295;
+
+const uint32_t UPGRADE_HEIGHT_V2                              = 69;
+const uint32_t UPGRADE_HEIGHT_V3                              = 70;
+const uint32_t UPGRADE_HEIGHT_V4                              = 71;
+const uint32_t UPGRADE_HEIGHT_V5                              = 72;
+const uint32_t UPGRADE_HEIGHT_REWARD_SCHEME                   = 73;
+const uint32_t UPGRADE_HEIGHT_V6                              = 73;
 
 const unsigned UPGRADE_VOTING_THRESHOLD                      = 90; // percent
 const uint32_t UPGRADE_VOTING_WINDOW                         = EXPECTED_NUMBER_OF_BLOCKS_PER_DAY;  // blocks

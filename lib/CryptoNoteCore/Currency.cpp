@@ -25,6 +25,7 @@
 #include <boost/math/special_functions/round.hpp>
 #include <Common/Base58.h>
 #include <Common/int-util.h>
+#include <Common/Math.h>
 #include <Common/StringTools.h>
 #include <CryptoNoteCore/Account.h>
 #include <CryptoNoteCore/CryptoNoteBasicImpl.h>
@@ -34,6 +35,7 @@
 #include <CryptoNoteCore/TransactionExtra.h>
 #include <CryptoNoteCore/UpgradeDetector.h>
 #include <Global/Constants.h>
+#include <Global/CryptoNoteConfig.h>
 
 #undef ERROR
 
@@ -676,13 +678,14 @@ uint64_t Currency::roundUpMinFee(uint64_t minimalFee, int digits) const
     return ret;
 }
 
-difficulty_type Currency::nextDifficulty(
-    uint32_t height,
+difficulty_type Currency::nextDifficulty(uint32_t height,
     uint8_t blockMajorVersion,
     std::vector<uint64_t> timestamps,
     std::vector<difficulty_type> cumulativeDifficulties) const
 {
-    if (blockMajorVersion >= BLOCK_MAJOR_VERSION_5) {
+    if (blockMajorVersion >= BLOCK_MAJOR_VERSION_6) {
+        return nextDifficultyV6(blockMajorVersion, timestamps, cumulativeDifficulties, height);
+    } else if (blockMajorVersion >= BLOCK_MAJOR_VERSION_5) {
         return nextDifficultyV5(blockMajorVersion, timestamps, cumulativeDifficulties);
     } else if (blockMajorVersion == BLOCK_MAJOR_VERSION_3
                || blockMajorVersion == BLOCK_MAJOR_VERSION_4) {
@@ -903,10 +906,12 @@ difficulty_type Currency::nextDifficultyV5(
         }
     }
 
+    // It is a potential error,  N should be less than cumulativeDifficulties.size()
     nextDiffV5 = uint64_t((cumulativeDifficulties[N] - cumulativeDifficulties[0]) * T * (N + 1))
                  / uint64_t(2 * L);
     nextDiffV5 = (nextDiffV5 * 99ull) / 100ull;
 
+    // It is a potential error,  N should be less than cumulativeDifficulties.size()
     prev_D = cumulativeDifficulties[N] - cumulativeDifficulties[N - 1];
     nextDiffV5 = clamp(
         (uint64_t)(prev_D * 67ull / 100ull),
@@ -926,6 +931,118 @@ difficulty_type Currency::nextDifficultyV5(
     }
 
     return nextDiffV5;
+}
+
+// difficulty for block version 6.0
+difficulty_type Currency::nextDifficultyV6(uint8_t blockMajorVersion,
+    std::vector<uint64_t> timestamps,
+    std::vector<difficulty_type> cumulativeDifficulties,
+    uint32_t height) const
+{
+    if(isTestnet()){
+        return CryptoNote::parameters::DEFAULT_DIFFICULTY;
+    }
+
+    // Dynamic difficulty calculation window
+    uint32_t diffWindow = timestamps.size();
+
+    // check if we use special scenario with some fixed diff
+    if (CryptoNote::parameters::FIXED_DIFFICULTY > 0)
+    {
+        logger (WARNING) << "Fixed difficulty is used: " <<
+                            CryptoNote::parameters::FIXED_DIFFICULTY;
+        return CryptoNote::parameters::FIXED_DIFFICULTY;
+    }
+
+    difficulty_type nextDiffV6 = CryptoNote::parameters::DEFAULT_DIFFICULTY;
+    // Condition #1 When starting a chain or a working testnet requiring
+    // block sample gathering until enough blocks are available (Kick-off Scenario)
+    // We shall set a baseline for the hashrate that is specific to mining
+    // algo and I propose doing so in the config file.
+    // *** During this initial sampling period, a best guess is the best strategy.
+    // Consider this as a service or trial period.
+    // With EPoW reward algo in place, we don't really need to worry about attackers
+    // or large miners taking advanatage of our system.
+    if (height < CryptoNote::parameters::UPGRADE_HEIGHT_V6 + diffWindow) {
+        return nextDiffV6;
+    }
+
+    // check all values in input vectors greater than previous value to calc adjacent differences later
+    if (std::adjacent_find(timestamps.begin(), timestamps.end(), std::greater<uint64_t>()) != timestamps.end()) {
+        logger (ERROR) << "Invalid timestamps for difficulty calculation";
+        return nextDiffV6;
+    }
+    if (std::adjacent_find(cumulativeDifficulties.begin(), cumulativeDifficulties.end(), std::greater_equal<difficulty_type>()) != cumulativeDifficulties.end()) {
+        logger (ERROR) << "Invalid cumulativeDifficulties for difficulty calculation";
+        return nextDiffV6;
+    }
+
+    // calc stat values to detect outliers
+    uint64_t avg_solvetime = (timestamps.back() - timestamps.front()) / diffWindow; // now subtraction is safe,  we know it is not negative
+    std::vector<uint64_t> solveTimes;
+    solveTimes.resize(timestamps.size());
+    std::adjacent_difference(timestamps.begin(), timestamps.end(), solveTimes.begin()); // we check it before and all diffs are positive
+    solveTimes.erase(solveTimes.begin());
+    uint64_t stddev_solvetime = Common::stddevValue(solveTimes);
+
+    // get difficulties from the cumulative difficulties
+    std::vector<difficulty_type> difficulties;
+    difficulties.resize(cumulativeDifficulties.size());
+    std::adjacent_difference(cumulativeDifficulties.begin(),
+                             cumulativeDifficulties.end(),
+                             difficulties.begin()); // we check it before and all diffs are positive
+    difficulties.erase(difficulties.begin());
+
+    uint64_t difficulty_target = CryptoNote::parameters::DIFFICULTY_TARGET;
+
+    // check if last solve time is outlier
+    uint64_t low_solvetime_limit = 0;
+    if (avg_solvetime > stddev_solvetime)
+        low_solvetime_limit = avg_solvetime - stddev_solvetime;
+    // combine times and difficulties in one container
+    std::vector<std::pair<uint64_t, difficulty_type>> combined;
+    combined.resize(solveTimes.size());
+    std::transform(solveTimes.begin(), solveTimes.end(), difficulties.begin(),
+                   combined.begin(),
+                   [](uint64_t st, difficulty_type d) { return std::make_pair(st, d); });
+
+    // filter outliers
+    auto to_erase = std::remove_if(
+        combined.begin(),
+        combined.end(),
+        [avg_solvetime, stddev_solvetime, low_solvetime_limit](std::pair<uint64_t, difficulty_type> p)
+            {   return (p.first < low_solvetime_limit) ||
+                     (p.first > avg_solvetime + stddev_solvetime);});
+    combined.erase(to_erase, combined.end());
+
+    // calc real average
+    std::vector<uint64_t> realSolveTimes;
+    realSolveTimes.resize(combined.size());
+    std::transform(combined.begin(), combined.end(),
+                   realSolveTimes.begin(),
+                   [](std::pair<uint64_t, difficulty_type> p) { return p.first; });
+    std::vector<difficulty_type> realDifficulty;
+    realDifficulty.resize(combined.size());
+    std::transform(combined.begin(), combined.end(),
+                   realDifficulty.begin(),
+                   [](std::pair<uint64_t, difficulty_type> p) { return p.second; });
+
+    uint64_t real_avg_solveTime = Common::meanValue(realSolveTimes);
+    difficulty_type real_last_difficulty = realDifficulty.back();
+
+    // calc difficulty
+
+    if (real_avg_solveTime < difficulty_target) {
+        nextDiffV6 = real_last_difficulty *
+                std::min(1.2, double(difficulty_target) / double(real_avg_solveTime));
+    } else if (real_avg_solveTime > difficulty_target) {
+        nextDiffV6 = std::max<difficulty_type>(CryptoNote::parameters::DEFAULT_DIFFICULTY,
+                              real_last_difficulty * double(difficulty_target) / double(real_avg_solveTime));
+    } else {
+        nextDiffV6 = std::max<difficulty_type>(CryptoNote::parameters::DEFAULT_DIFFICULTY,
+                                               real_last_difficulty);
+    }
+    return nextDiffV6;
 }
 
 bool Currency::checkProofOfWorkV1(
