@@ -301,7 +301,7 @@ void WalletLegacy::initSync()
     AccountSubscription sub;
     sub.keys = reinterpret_cast<const AccountKeys &>(m_account.getAccountKeys());
     sub.transactionSpendableAge = CryptoNote::parameters::CRYPTONOTE_TX_SPENDABLE_AGE;
-    sub.syncStart.height = 0;
+    sub.syncStart.height = m_transactionsCache.getShrinkHeight();
     sub.syncStart.timestamp = m_account.get_createtime() - ACCOUNT_CREATE_TIME_ACCURACY;
 
     auto &subObject = m_transfersSync.addSubscription(sub);
@@ -414,7 +414,32 @@ void WalletLegacy::shutdown()
     }
 }
 
-void WalletLegacy::reset()
+void WalletLegacy::rescan()
+{
+    try {
+        std::error_code saveError;
+        std::stringstream ss;
+
+        {
+            SaveWaiter saveWaiter;
+            WalletHelper::IWalletRemoveObserverGuard saveGuarantee(*this, saveWaiter);
+            save(ss, true, true);
+            saveError = saveWaiter.waitSave();
+        }
+
+        if (!saveError) {
+            shutdown();
+            InitWaiter initWaiter;
+            WalletHelper::IWalletRemoveObserverGuard initGuarantee(*this, initWaiter);
+            initAndLoad(ss, m_password);
+            initWaiter.waitInit();
+        }
+    } catch (std::exception &e) {
+        std::cout << "exception in reset: " << e.what() << std::endl;
+    }
+}
+
+void WalletLegacy::purge()
 {
     try {
         std::error_code saveError;
@@ -435,7 +460,7 @@ void WalletLegacy::reset()
             initWaiter.waitInit();
         }
     } catch (std::exception &e) {
-        std::cout << "exception in reset: " << e.what() << std::endl;
+        std::cout << "exception in purge: " << e.what() << std::endl;
     }
 }
 
@@ -684,6 +709,24 @@ size_t WalletLegacy::getUnlockedOutputsCount()
     return outputs.size();
 }
 
+std::list<TransactionOutputInformation> WalletLegacy::selectAllOldOutputs(uint32_t height)
+{
+    std::vector<TransactionOutputInformation> outputs;
+    m_transferDetails->getOutputs(outputs, ITransfersContainer::IncludeKeyUnlocked);
+
+    std::list<TransactionOutputInformation> result;
+    for (const auto& toi: outputs) {
+        TransactionId id = m_transactionsCache.findTransactionByHash(toi.transactionHash);
+        if (id == CryptoNote::WALLET_LEGACY_INVALID_TRANSACTION_ID)
+            continue;
+        WalletLegacyTransaction& tx = m_transactionsCache.getTransaction(id);
+        if(tx.blockHeight <= height)
+            result.push_back(toi);
+    }
+
+    return result;
+}
+
 size_t WalletLegacy::estimateFusion(const uint64_t &threshold)
 {
     size_t fusionReadyCount = 0;
@@ -925,6 +968,7 @@ TransactionId WalletLegacy::sendFusionTransaction(
     for (auto &out : fusionInputs) {
         destination.amount += out.amount;
     }
+    destination.amount -= fee;
     destination.address = getAddress();
     transfers.push_back(destination);
 
@@ -1145,6 +1189,16 @@ bool WalletLegacy::isTrackingWallet()
     getAccountKeys(keys);
 
     return keys.spendSecretKey == boost::value_initialized<Crypto::SecretKey>();
+}
+
+void WalletLegacy::setShrinkHeight(uint32_t height)
+{
+    m_transactionsCache.setShrinkHeight(height);
+}
+
+uint32_t WalletLegacy::getShrinkHeight() const
+{
+    return m_transactionsCache.getShrinkHeight();
 }
 
 std::vector<TransactionId> WalletLegacy::deleteOutdatedUnconfirmedTransactions()

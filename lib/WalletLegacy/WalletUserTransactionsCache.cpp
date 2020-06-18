@@ -33,7 +33,8 @@ using namespace Crypto;
 namespace CryptoNote {
 
 WalletUserTransactionsCache::WalletUserTransactionsCache(uint64_t mempoolTxLiveTime)
-    : m_unconfirmedTransactions(mempoolTxLiveTime)
+    : m_unconfirmedTransactions(mempoolTxLiveTime),
+      m_shrinkHeight(0)
 {
 }
 
@@ -47,6 +48,7 @@ bool WalletUserTransactionsCache::serialize(CryptoNote::ISerializer &s)
         updateUnconfirmedTransactions();
         deleteOutdatedTransactions();
         rebuildPaymentsIndex();
+        // m_shrinkHeight is serialized outside this method
     } else {
         UserTransactions txsToSave;
         UserTransfers transfersToSave;
@@ -55,6 +57,7 @@ bool WalletUserTransactionsCache::serialize(CryptoNote::ISerializer &s)
         s(txsToSave, "transactions");
         s(transfersToSave, "transfers");
         s(m_unconfirmedTransactions, "unconfirmed");
+        // m_shrinkHeight is serialized outside this method
     }
 
     return true;
@@ -410,24 +413,17 @@ void WalletUserTransactionsCache::getGoodItems(
     UserTransactions &transactions,
     UserTransfers &transfers)
 {
-    size_t offset = 0;
-
     for (size_t txId = 0; txId < m_transactions.size(); ++txId) {
         bool isGood = m_transactions[txId].state != WalletLegacyTransactionState::Cancelled
                       && m_transactions[txId].state != WalletLegacyTransactionState::Failed;
 
-        if (isGood) {
-            getGoodTransaction(txId, offset, transactions, transfers);
-        } else {
-            const WalletLegacyTransaction &t = m_transactions[txId];
-            offset += t.firstTransferId != WALLET_LEGACY_INVALID_TRANSFER_ID ? t.transferCount : 0;
-        }
+        if (isGood)
+            getGoodTransaction(txId, transactions, transfers);
     }
 }
 
 void WalletUserTransactionsCache::getGoodTransaction(
     TransactionId txId,
-    size_t offset,
     UserTransactions &transactions,
     UserTransfers &transfers)
 {
@@ -441,9 +437,8 @@ void WalletUserTransactionsCache::getGoodTransaction(
     UserTransfers::const_iterator first = m_transfers.begin() + tx.firstTransferId;
     UserTransfers::const_iterator last = first + tx.transferCount;
 
-    tx.firstTransferId -= offset;
-
     std::copy(first, last, std::back_inserter(transfers));
+    tx.firstTransferId = transfers.size() - tx.transferCount;
 }
 
 void WalletUserTransactionsCache::getTransfersByTx(

@@ -78,7 +78,8 @@ public:
     void initAndLoad(std::istream &source, const std::string &password) override;
     void initWithKeys(const AccountKeys &accountKeys, const std::string &password) override;
     void shutdown() override;
-    void reset() override;
+    void rescan() override;
+    void purge() override;
 
     Crypto::SecretKey generateKey(
         const std::string &password,
@@ -101,6 +102,8 @@ public:
     size_t getTransactionCount() override;
     size_t getTransferCount() override;
     size_t getUnlockedOutputsCount() override;
+
+    std::list<TransactionOutputInformation> selectAllOldOutputs(uint32_t height) override;
 
     TransactionId findTransactionByTransferId(TransferId transferId) override;
 
@@ -163,6 +166,9 @@ public:
                         const std::string &signature) override;
 
     bool isTrackingWallet() override;
+
+    void setShrinkHeight(uint32_t height) override;
+    uint32_t getShrinkHeight() const override;
 
 private:
     // IBlockchainSynchronizerObserver
