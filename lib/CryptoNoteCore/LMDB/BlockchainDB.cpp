@@ -37,7 +37,11 @@
 #include <CryptoNoteCore/Currency.h>
 #include <CryptoNoteCore/LMDB/BinaryArrayDataType.h>
 #include <CryptoNoteCore/LMDB/BlockchainDB.h>
+<<<<<<< HEAD
 #include <CryptoNoteCore/LMDB/DatabaseLMDB.h>
+=======
+#include <CryptoNoteCore/LMDB/DatabaseLmdb.h>
+>>>>>>> Add LMDB files
 
 using Common::podToHex;
 
@@ -109,10 +113,18 @@ uint64_t BlockchainDB::addBlock(const CryptoNote::Block &block,
                                 const size_t &blockSize,
                                 const uint64_t &cumulativeDifficulty,
                                 const uint64_t &coinsGenerated,
+<<<<<<< HEAD
                                 const std::vector<CryptoNote::Transaction> &txs)
 {
     blockTxnStart(false);
     Crypto::Hash blkHash = get_block_hash (block);
+=======
+                                const uint64_t &transactionsGenerated,
+                                const std::vector<CryptoNote::Transaction> &txs)
+{
+    blockTxnStart(false);
+    Crypto::Hash blkHash = getBlockHash (block);
+>>>>>>> Add LMDB files
     uint64_t prevHeight = height ();
 
     /*!
@@ -120,7 +132,11 @@ uint64_t BlockchainDB::addBlock(const CryptoNote::Block &block,
      */
     addTransaction(blkHash, block.baseTransaction);
     int txI = 0;
+<<<<<<< HEAD
     Crypto::Hash mHash = NULL_HASH;
+=======
+    Crypto::Hash mHash = Constants::NULL_HASH;
+>>>>>>> Add LMDB files
 
     for (const auto &tx : txs) {
         mHash = block.transactionHashes[txI];
@@ -132,7 +148,11 @@ uint64_t BlockchainDB::addBlock(const CryptoNote::Block &block,
     /*!
      * call out to subclass implementation to add the block & metadata
      */
+<<<<<<< HEAD
     addBlock(block, blockSize, cumulativeDifficulty, coinsGenerated, blkHash);
+=======
+    addBlock(block, blockSize, cumulativeDifficulty, coinsGenerated, transactionsGenerated, blkHash);
+>>>>>>> Add LMDB files
 
     mHardfork->add(block, prevHeight);
 

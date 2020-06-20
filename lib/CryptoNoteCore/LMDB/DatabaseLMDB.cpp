@@ -43,13 +43,20 @@
 #include <crypto/crypto.h>
 #include <crypto/hash.h>
 
+<<<<<<< HEAD
 #include <CryptoNoteCore/CryptoNoteBasicImpl.h>
+=======
+>>>>>>> Add LMDB files
 #include <CryptoNoteCore/CryptoNoteFormatUtils.h>
 #include <CryptoNoteCore/CryptoNoteTools.h>
 #include <CryptoNoteCore/Currency.h>
 #include <CryptoNoteCore/TransactionUtils.h>
 #include <CryptoNoteCore/LMDB/BinaryArrayDataType.h>
+<<<<<<< HEAD
 #include <CryptoNoteCore/LMDB/DatabaseLMDB.h>
+=======
+#include <CryptoNoteCore/LMDB/DatabaseLmdb.h>
+>>>>>>> Add LMDB files
 
 #include <Global/CryptoNoteConfig.h>
 
@@ -245,6 +252,10 @@ typedef struct mdbBlockInfo
     uint64_t biHeight;
     uint64_t biTimestamp;
     uint64_t biCoins;
+<<<<<<< HEAD
+=======
+    uint64_t biTransactions;
+>>>>>>> Add LMDB files
     uint64_t biSize;
     uint64_t biDiff;
     Crypto::Hash biHash;
@@ -501,6 +512,10 @@ void BlockchainLMDB::addBlock(const CryptoNote::Block &block,
                               const size_t &blockSize,
                               const uint64_t &cumulativeDifficulty,
                               const uint64_t &coinsGenerated,
+<<<<<<< HEAD
+=======
+                              const uint64_t &transactionsGenerated,
+>>>>>>> Add LMDB files
                               const Crypto::Hash &blockHash)
 {
     checkOpen();
@@ -548,6 +563,10 @@ void BlockchainLMDB::addBlock(const CryptoNote::Block &block,
         bI.biHeight         = mHeight;
         bI.biTimestamp      = block.timestamp;
         bI.biCoins          = coinsGenerated;
+<<<<<<< HEAD
+=======
+        bI.biTransactions   = transactionsGenerated;
+>>>>>>> Add LMDB files
         bI.biSize           = blockSize;
         bI.biDiff           = cumulativeDifficulty;
         bI.biHash           = blockHash;
@@ -1856,7 +1875,10 @@ uint64_t BlockchainLMDB::getBlockAlreadyGeneratedCoins(const uint64_t &height) c
     return ret;
 }
 
+<<<<<<< HEAD
 /*
+=======
+>>>>>>> Add LMDB files
 uint64_t BlockchainLMDB::getBlockAlreadyGeneratedTransactions(const uint64_t &height) const
 {
     checkOpen();
@@ -1880,7 +1902,11 @@ uint64_t BlockchainLMDB::getBlockAlreadyGeneratedTransactions(const uint64_t &he
 
     return ret;
 }
+<<<<<<< HEAD
 */
+=======
+
+>>>>>>> Add LMDB files
 Crypto::Hash BlockchainLMDB::getBlockHashFromHeight(const uint64_t &height) const
 {
     checkOpen ();
@@ -1939,7 +1965,11 @@ Crypto::Hash BlockchainLMDB::getTopBlockHash() const
         return getBlockHashFromHeight (mHeight);
     }
 
+<<<<<<< HEAD
     return NULL_HASH;
+=======
+    return Constants::NULL_HASH;
+>>>>>>> Add LMDB files
 }
 
 CryptoNote::Block BlockchainLMDB::getTopBlock() const
@@ -2428,7 +2458,11 @@ throw (DB_ERROR("Failed to parse block from blob retrieved from the db"));
 }
 
 Crypto::Hash hash;
+<<<<<<< HEAD
 if (!get_block_hash (bT, hash)) {
+=======
+if (!getBlockHash (bT, hash)) {
+>>>>>>> Add LMDB files
 throw (DB_ERROR("Failed to get block hash from blob retrieved from the db"));
 }
 
@@ -2866,6 +2900,10 @@ uint64_t BlockchainLMDB::addBlock(const CryptoNote::Block &block,
                                   const size_t &blockSize,
                                   const uint64_t &cumulativeDifficulty,
                                   const uint64_t &coinsGenerated,
+<<<<<<< HEAD
+=======
+                                  const uint64_t &transactionsGenerated,
+>>>>>>> Add LMDB files
                                   const std::vector<CryptoNote::Transaction> &txs)
 {
     checkOpen ();
@@ -2876,6 +2914,10 @@ uint64_t BlockchainLMDB::addBlock(const CryptoNote::Block &block,
                                 blockSize,
                                 cumulativeDifficulty,
                                 coinsGenerated,
+<<<<<<< HEAD
+=======
+                                transactionsGenerated,
+>>>>>>> Add LMDB files
                                 txs);
     } catch (const DB_ERROR_TXN_START &e) {
         throw;
@@ -3839,7 +3881,11 @@ void BlockchainLMDB::migrate0To1()
                 throw(DB_ERROR("Failed to parse block from blob retrieved from the db"));
             }
 
+<<<<<<< HEAD
             addTransaction(NULL_HASH, bT.baseTransaction);
+=======
+            addTransaction(Constants::NULL_HASH, bT.baseTransaction);
+>>>>>>> Add LMDB files
             for (unsigned int j = 0; j < bT.transactionHashes.size(); j++) {
                 CryptoNote::Transaction tx;
                 hK.mv_data = &bT.transactionHashes[j];
@@ -3852,7 +3898,11 @@ void BlockchainLMDB::migrate0To1()
                     throw(DB_ERROR("Failed to parse tx from blob retrieved from the db"));
                 }
 
+<<<<<<< HEAD
                 addTransaction(NULL_HASH, tx, &bT.transactionHashes[j]);
+=======
+                addTransaction(Constants::NULL_HASH, tx, &bT.transactionHashes[j]);
+>>>>>>> Add LMDB files
                 result = mdb_cursor_del(cTxs, 0);
                 if (result) {
                     throw(DB_ERROR(LMDBError("Failed to get record from txs: ", result).c_str()));
