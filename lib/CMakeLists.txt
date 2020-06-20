@@ -287,6 +287,8 @@ set(QwertycoinFramework_CryptoNoteCore_SOURCES
     "${CMAKE_CURRENT_LIST_DIR}/CryptoNoteCore/Currency.h"
     "${CMAKE_CURRENT_LIST_DIR}/CryptoNoteCore/Difficulty.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/CryptoNoteCore/Difficulty.h"
+    "${CMAKE_CURRENT_LIST_DIR}/CryptoNoteCore/Hardfork.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/CryptoNoteCore/Hardfork.h"
     "${CMAKE_CURRENT_LIST_DIR}/CryptoNoteCore/IBlock.h"
     "${CMAKE_CURRENT_LIST_DIR}/CryptoNoteCore/IBlockchainStorageObserver.h"
     "${CMAKE_CURRENT_LIST_DIR}/CryptoNoteCore/ICore.h"
@@ -317,6 +319,16 @@ set(QwertycoinFramework_CryptoNoteCore_SOURCES
     "${CMAKE_CURRENT_LIST_DIR}/CryptoNoteCore/TransactionUtils.h"
     "${CMAKE_CURRENT_LIST_DIR}/CryptoNoteCore/UpgradeDetector.h"
     "${CMAKE_CURRENT_LIST_DIR}/CryptoNoteCore/VerificationContext.h"
+    "${CMAKE_CURRENT_LIST_DIR}/CryptoNoteCore/LMDB/BinaryArchive.h"
+    "${CMAKE_CURRENT_LIST_DIR}/CryptoNoteCore/LMDB/BinaryArrayDataType.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/CryptoNoteCore/LMDB/BinaryArrayDataType.h"
+    "${CMAKE_CURRENT_LIST_DIR}/CryptoNoteCore/LMDB/BlockchainDB.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/CryptoNoteCore/LMDB/BlockchainDB.h"
+    "${CMAKE_CURRENT_LIST_DIR}/CryptoNoteCore/LMDB/DBTypes.h"
+    "${CMAKE_CURRENT_LIST_DIR}/CryptoNoteCore/LMDB/DatabaseLMDB.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/CryptoNoteCore/LMDB/DatabaseLMDB.h"
+    "${CMAKE_CURRENT_LIST_DIR}/CryptoNoteCore/LMDB/Structures.h"
+    "${CMAKE_CURRENT_LIST_DIR}/CryptoNoteCore/LMDB/TestLMDB.h"
 )
 
 set(QwertycoinFramework_CryptoNoteCore_LIBS
@@ -363,6 +375,7 @@ set(QwertycoinFramework_Global_SOURCES
     "${CMAKE_CURRENT_LIST_DIR}/Global/Constants.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/Global/Constants.h"
     "${CMAKE_CURRENT_LIST_DIR}/Global/CryptoNoteConfig.h"
+    "${CMAKE_CURRENT_LIST_DIR}/Global/LMDBConfig.h"
 )
 
 add_library(QwertycoinFramework_Global STATIC ${QwertycoinFramework_Global_SOURCES})
