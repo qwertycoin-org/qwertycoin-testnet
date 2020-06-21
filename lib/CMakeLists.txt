@@ -168,6 +168,8 @@ set(QwertycoinFramework_Common_SOURCES
     "${CMAKE_CURRENT_LIST_DIR}/Common/StringUtils.h"
     "${CMAKE_CURRENT_LIST_DIR}/Common/StringView.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/Common/StringView.h"
+    "${CMAKE_CURRENT_LIST_DIR}/Common/ThreadPool.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/Common/ThreadPool.h"
     "${CMAKE_CURRENT_LIST_DIR}/Common/Util.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/Common/Util.h"
     "${CMAKE_CURRENT_LIST_DIR}/Common/Varint.h"
@@ -635,6 +637,10 @@ set(QwertycoinFramework_Serialization_SOURCES
     "${CMAKE_CURRENT_LIST_DIR}/Serialization/SerializationOverloads.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/Serialization/SerializationOverloads.h"
     "${CMAKE_CURRENT_LIST_DIR}/Serialization/SerializationTools.h"
+    "${CMAKE_CURRENT_LIST_DIR}/Serialization/Boost/BoostSerializationHelper.h"
+    "${CMAKE_CURRENT_LIST_DIR}/Serialization/Boost/CryptoNoteBoostSerialization.h"
+    "${CMAKE_CURRENT_LIST_DIR}/Serialization/Boost/portable_binary_iarchive.h"
+    "${CMAKE_CURRENT_LIST_DIR}/Serialization/Boost/portable_binary_oarchive.h"
 )
 
 add_library(QwertycoinFramework_Serialization STATIC ${QwertycoinFramework_Serialization_SOURCES})
