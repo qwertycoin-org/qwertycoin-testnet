@@ -345,6 +345,16 @@ std::string getDefaultDataDirectory()
     return config_folder;
 }
 
+std::string getDefaultDBType()
+{
+    return "lmdb";
+}
+
+std::string getDefaultDBSyncMode()
+{
+    return "fastest:async:1000";
+}
+
 bool create_directories_if_necessary(const std::string &path)
 {
     namespace fs = boost::filesystem;
