@@ -121,7 +121,7 @@ struct BinaryArchive<false>: public BinaryArchiveBase<std::istream, false>
     void serializeUVarint(T &v)
     {
         typedef std::istreambuf_iterator<char> it;
-        Tools::readVarint(it(mStream), it(), v); // XXX handle failure
+        Tools::read_varint(it(mStream), it(), v); // XXX handle failure
     }
 
     void beginArray(size_t &s)
@@ -190,7 +190,7 @@ struct BinaryArchive<true> : public BinaryArchiveBase<std::ostream, true>
     void serializeUVarint(T &v)
     {
         typedef std::ostreambuf_iterator<char> it;
-        Tools::writeVarint(it(mStream), v);
+        Tools::write_varint(it(mStream), v);
     }
 
     void beginArray() {}
