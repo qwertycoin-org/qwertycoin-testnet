@@ -13,7 +13,7 @@
 
 #include <Common/CommandLine.h>
 
-#include <crypto/Hash.h>
+#include <crypto/hash.h>
 
 #include <CryptoNoteCore/CryptoNoteFormatUtils.h>
 #include <CryptoNoteCore/Currency.h>
