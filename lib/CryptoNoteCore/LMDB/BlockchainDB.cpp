@@ -109,7 +109,6 @@ uint64_t BlockchainDB::addBlock(const CryptoNote::Block &block,
                                 const size_t &blockSize,
                                 const uint64_t &cumulativeDifficulty,
                                 const uint64_t &coinsGenerated,
-                                const uint64_t &transactionsGenerated,
                                 const std::vector<CryptoNote::Transaction> &txs)
 {
     blockTxnStart(false);
@@ -133,7 +132,7 @@ uint64_t BlockchainDB::addBlock(const CryptoNote::Block &block,
     /*!
      * call out to subclass implementation to add the block & metadata
      */
-    addBlock(block, blockSize, cumulativeDifficulty, coinsGenerated, transactionsGenerated, blkHash);
+    addBlock(block, blockSize, cumulativeDifficulty, coinsGenerated, blkHash);
 
     mHardfork->add(block, prevHeight);
 

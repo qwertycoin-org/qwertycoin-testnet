@@ -501,7 +501,6 @@ void BlockchainLMDB::addBlock(const CryptoNote::Block &block,
                               const size_t &blockSize,
                               const uint64_t &cumulativeDifficulty,
                               const uint64_t &coinsGenerated,
-                              const uint64_t &transactionsGenerated,
                               const Crypto::Hash &blockHash)
 {
     checkOpen();
@@ -2867,7 +2866,6 @@ uint64_t BlockchainLMDB::addBlock(const CryptoNote::Block &block,
                                   const size_t &blockSize,
                                   const uint64_t &cumulativeDifficulty,
                                   const uint64_t &coinsGenerated,
-                                  const uint64_t &transactionsGenerated,
                                   const std::vector<CryptoNote::Transaction> &txs)
 {
     checkOpen ();
@@ -2878,7 +2876,6 @@ uint64_t BlockchainLMDB::addBlock(const CryptoNote::Block &block,
                                 blockSize,
                                 cumulativeDifficulty,
                                 coinsGenerated,
-                                transactionsGenerated,
                                 txs);
     } catch (const DB_ERROR_TXN_START &e) {
         throw;

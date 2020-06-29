@@ -297,7 +297,6 @@ private:
                           const size_t &blockSize,
                           const uint64_t &cumulativeDifficulty,
                           const uint64_t &coinsGenerated,
-                          const uint64_t &transactionsGenerated,
                           const Crypto::Hash &blockHash) = 0;
 
     /*!
@@ -309,7 +308,6 @@ private:
      *                        const size_t &blockSize,
      *                        const uint64_t &cumulativeDifficulty,
      *                        const uint64_t &coinsGenerated,
-     *                        const uint64_t &transactionsGenerated,
      *                        const Crypto::Hash &blockHash)
      *
      * If any of this cannot be done, the subclass should throw the corresponding
@@ -715,7 +713,6 @@ public:
                               const size_t &blockSize,
                               const uint64_t &cumulativeDifficulty,
                               const uint64_t &coinsGenerated,
-                              const uint64_t &transactionsGenerated,
                               const std::vector<CryptoNote::Transaction> &txs);
 
     /*!

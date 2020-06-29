@@ -232,7 +232,6 @@ public:
                               const size_t &blockSize,
                               const uint64_t &cumulativeDifficulty,
                               const uint64_t &coinsGenerated,
-                              const uint64_t &transactionsGenerated,
                               const std::vector<CryptoNote::Transaction> &txs);
     virtual void setBatchTransactions(bool batchTransactions);
     virtual bool batchStart(uint64_t batchNumBlocks=0, uint64_t batchBytes=0);
@@ -273,7 +272,6 @@ private:
                           const size_t &blockSize,
                           const uint64_t &cumulativeDifficulty,
                           const uint64_t &coinsGenerated,
-                          const uint64_t &transactionsGenerated,
                           const Crypto::Hash &blockHash);
     virtual void removeBlock();
     virtual uint64_t addTransactionData(const Crypto::Hash &blockHash,
