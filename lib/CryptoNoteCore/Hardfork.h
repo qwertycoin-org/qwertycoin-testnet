@@ -57,9 +57,9 @@ public:
      */
     Hardfork(BlockchainDB &db,
              uint8_t originalVersion = 1,
-             uint64_t originalVersionTillHeight = ::Hardfork::DEFAULT_ORIGINAL_VERSION_TILL_HEIGHT,
-             uint64_t windowSize = ::Hardfork::DEFAULT_WINDOW_SIZE,
-             uint8_t defaultThresholdPercent = ::Hardfork::DEFAULT_THRESHOLD_PERCENT);
+             uint64_t originalVersionTillHeight = Qwertycoin::Hardfork::DEFAULT_ORIGINAL_VERSION_TILL_HEIGHT,
+             uint64_t windowSize = Qwertycoin::Hardfork::DEFAULT_WINDOW_SIZE,
+             uint8_t defaultThresholdPercent = Qwertycoin::Hardfork::DEFAULT_THRESHOLD_PERCENT);
 
     uint8_t getBlockVote(CryptoNote::Block const *b) const;
     uint8_t getBlockVersion(CryptoNote::Block const &b) const;
