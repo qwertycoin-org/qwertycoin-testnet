@@ -17,10 +17,14 @@
 // along with Qwertycoin.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <vector>
+
 #include <boost/multi_index_container.hpp>
 #include <boost/multi_index/hashed_index.hpp>
 #include <boost/multi_index/random_access_index.hpp>
+
 #include <crypto/hash.h>
+
+#include <CryptoNoteCore/LMDB/BlockchainDB.h>
 
 namespace CryptoNote {
 
@@ -82,9 +86,18 @@ public:
     }
 
     Crypto::Hash getBlockId(uint32_t height) const;
+    Crypto::Hash getBlockId(uint32_t height, BlockchainDB &mDb) const;
     std::vector<Crypto::Hash> getBlockIds(uint32_t startBlockIndex, uint32_t maxCount) const;
+    std::vector<Crypto::Hash> getBlockIds(uint32_t startBlockIndex,
+                                          uint32_t maxCount,
+                                          BlockchainDB& mDb) const;
     bool findSupplement(const std::vector<Crypto::Hash> &ids, uint32_t &offset) const;
+    bool findSupplement(const std::vector<Crypto::Hash> &ids,
+                        uint32_t &offset,
+                        BlockchainDB &mDb) const;
     std::vector<Crypto::Hash> buildSparseChain(const Crypto::Hash &startBlockId) const;
+    std::vector<Crypto::Hash> buildSparseChain(const Crypto::Hash& startBlockId,
+                                               BlockchainDB& db) const;
     Crypto::Hash getTailId() const;
 
     void serialize(ISerializer &s);
