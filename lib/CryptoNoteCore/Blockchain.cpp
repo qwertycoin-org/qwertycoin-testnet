@@ -1280,7 +1280,7 @@ difficulty_type Blockchain::getDifficultyForNextBlock()
     std::vector<difficulty_type> cumulative_difficulties;
     difficulty_type diff = 0;
     bool r = Tools::getDefaultDBType() != "lmdb";
-    uint8_t BlockMajorVersion=getBlockMajorVersionForHeight(static_cast<uint32_t>(m_blocks.size()));
+    uint8_t BlockMajorVersion=getBlockMajorVersionForHeight(static_cast<uint32_t>(HEIGHT_COND));
     size_t offset;
     offset = HEIGHT_COND - std::min(
              HEIGHT_COND,
@@ -3556,7 +3556,7 @@ bool Blockchain::pushBlock(
     uint64_t reward = 0;
     uint64_t already_generated_coins = 0;
 
-    if (!checkCumulativeBlockSize(blockHash, cumulative_block_size, m_blocks.size())) {
+    if (!checkCumulativeBlockSize(blockHash, cumulative_block_size, HEIGHT_COND)) {
         bvc.m_verification_failed = true;
         return false;
     }
@@ -3567,7 +3567,7 @@ bool Blockchain::pushBlock(
 
     if (!validate_miner_transaction(
             blockData,
-            static_cast<uint32_t>(m_blocks.size()),
+            static_cast<uint32_t>(HEIGHT_COND),
             cumulative_block_size,
             already_generated_coins,
             fee_summary,
