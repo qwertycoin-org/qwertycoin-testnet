@@ -27,7 +27,7 @@ const size_t MAX_DIRTY = 1000;
 /*!
  * min. available/empty room in the db
  */
-const size_t MAPSIZE_MIN_AVAIL = 64 * Constants::MEGABYTE;
+const size_t MAPSIZE_MIN_AVAIL = 64 * Qwertycoin::Constants::MEGABYTE;
 
 /*!
  * Shift << n / MEGABYTE =
