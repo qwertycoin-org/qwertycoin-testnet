@@ -172,7 +172,7 @@ public:
     virtual uint64_t getBlockCumulativeDifficulty(const uint64_t &height) const;
     virtual uint64_t getBlockDifficulty(const uint64_t &height) const;
     virtual uint64_t getBlockAlreadyGeneratedCoins(const uint64_t &height) const;
-    virtual uint64_t getBlockAlreadyGeneratedTransactions(const uint64_t &height) const;
+    // virtual uint64_t getBlockAlreadyGeneratedTransactions(const uint64_t &height) const;
     virtual Crypto::Hash getBlockHashFromHeight(const uint64_t &height) const;
     virtual std::vector<CryptoNote::Block> getBlocksRange(const uint64_t &h1, const uint64_t &h2) const;
     virtual std::vector<Crypto::Hash> getHashesRange(const uint64_t &h1, const uint64_t &h2) const;
