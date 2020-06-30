@@ -6,7 +6,7 @@
 #include <CryptoNoteCore/Currency.h>
 #include <CryptoNoteCore/Hardfork.h>
 #include <CryptoNoteCore/LMDB/BlockchainDB.h>
-#include <CryptoNoteCore/LMDB/DatabaseLmdb.h>
+#include <CryptoNoteCore/LMDB/DatabaseLMDB.h>
 
 namespace CryptoNote {
 Hardfork::Hardfork(BlockchainDB &db,
