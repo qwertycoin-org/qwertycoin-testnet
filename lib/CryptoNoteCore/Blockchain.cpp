@@ -1976,7 +1976,7 @@ bool Blockchain::get_last_n_blocks_sizes(std::vector<size_t> &sz, size_t count)
     if (!HEIGHT_COND) {
         return true;
     }
-    return getBackwardBlocksSize(m_blocks.size() - 1, sz, count);
+    return getBackwardBlocksSize(HEIGHT_COND - 1, sz, count);
 
     auto h = mDb->height();
 
@@ -3493,7 +3493,7 @@ bool Blockchain::pushBlock(
         std::chrono::steady_clock::now() - longhashTimeStart
     ).count();
 
-    if (!prevalidate_miner_transaction(blockData, static_cast<uint32_t>(m_blocks.size()))) {
+    if (!prevalidate_miner_transaction(blockData, static_cast<uint32_t>(HEIGHT_COND))) {
         logger(INFO, BRIGHT_WHITE)
             << "Block "
             << blockHash
