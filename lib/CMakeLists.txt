@@ -14,6 +14,7 @@ set(QwertycoinFramework_INCLUDE_DIRS
     "${CMAKE_CURRENT_BINARY_DIR}"
     "${CMAKE_CURRENT_LIST_DIR}"
     "${CMAKE_CURRENT_LIST_DIR}/../include"
+    "${CMAKE_CURRENT_LIST_DIR}/../external"
 )
 
 if(MSVC)
@@ -334,8 +335,11 @@ set(QwertycoinFramework_CryptoNoteCore_SOURCES
 )
 
 set(QwertycoinFramework_CryptoNoteCore_LIBS
+    Boost::atomic
     Boost::filesystem
     Boost::program_options
+    Boost::thread
+    lmdb
     sparsehash::sparsehash
     QwertycoinFramework::BlockchainExplorer
     QwertycoinFramework::Common
