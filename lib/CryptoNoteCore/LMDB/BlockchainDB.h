@@ -895,7 +895,7 @@ public:
      *
      * @return the already generated transactions
      */
-    virtual uint64_t getBlockAlreadyGeneratedTransactions(const uint64_t &height) const = 0;
+    // virtual uint64_t getBlockAlreadyGeneratedTransactions(const uint64_t &height) const = 0;
 
     /*!
      * @brief fetch a block's hash

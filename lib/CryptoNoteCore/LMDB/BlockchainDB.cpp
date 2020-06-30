@@ -37,7 +37,7 @@
 #include <CryptoNoteCore/Currency.h>
 #include <CryptoNoteCore/LMDB/BinaryArrayDataType.h>
 #include <CryptoNoteCore/LMDB/BlockchainDB.h>
-#include <CryptoNoteCore/LMDB/DatabaseLmdb.h>
+#include <CryptoNoteCore/LMDB/DatabaseLMDB.h>
 
 using Common::podToHex;
 
@@ -112,7 +112,7 @@ uint64_t BlockchainDB::addBlock(const CryptoNote::Block &block,
                                 const std::vector<CryptoNote::Transaction> &txs)
 {
     blockTxnStart(false);
-    Crypto::Hash blkHash = getBlockHash (block);
+    Crypto::Hash blkHash = get_block_hash (block);
     uint64_t prevHeight = height ();
 
     /*!
@@ -120,7 +120,7 @@ uint64_t BlockchainDB::addBlock(const CryptoNote::Block &block,
      */
     addTransaction(blkHash, block.baseTransaction);
     int txI = 0;
-    Crypto::Hash mHash = Constants::NULL_HASH;
+    Crypto::Hash mHash = NULL_HASH;
 
     for (const auto &tx : txs) {
         mHash = block.transactionHashes[txI];
