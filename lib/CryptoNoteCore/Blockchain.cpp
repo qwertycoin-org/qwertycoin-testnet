@@ -2323,7 +2323,7 @@ bool Blockchain::getBlocks(
         if (r) {
             getTransactions(m_blocks[i].bl.transactionHashes, txs, missed_ids);
         } else {
-            getTransactions(b.transactionHashes, txs, missed_ids);
+            get_transactions(b.transactionHashes, txs, missed_ids);
         }
 
         if (missed_ids.size() != 0) {
@@ -2346,7 +2346,11 @@ bool Blockchain::getBlocks(uint32_t start_offset, uint32_t count, std::list<Bloc
     }
 
     for (uint32_t i = start_offset; i < start_offset + count && i < HEIGHT_COND; i++) {
-        blocks.push_back(m_blocks[i].bl);
+        Block b;
+        if (!r) {
+            b = mDb->getBlockFromHeight(i);
+        }
+        blocks.push_back((r ? m_blocks[i].bl : b));
     }
 
     return true;
@@ -2358,6 +2362,10 @@ bool Blockchain::handleGetObjects(
     NOTIFY_RESPONSE_GET_OBJECTS::request &rsp)
 {
     std::lock_guard<decltype(m_blockchain_lock)> lk(m_blockchain_lock);
+
+    DB_TX_START
+    bool r = Tools::getDefaultDBType() != "lmdb";
+
     rsp.current_blockchain_height = getCurrentBlockchainHeight();
     std::list<Block> blocks;
     getBlocks(arg.blocks, blocks, rsp.missed_ids);
@@ -2377,17 +2385,32 @@ bool Blockchain::handleGetObjects(
         e.block = asString(toBinaryArray(bl));
         //pack transactions
         for (Transaction &tx : txs) {
-            e.txs.push_back(asString(toBinaryArray(tx)));
+            if (r) {
+                e.txs.push_back(asString(toBinaryArray(tx)));
+            } else {
+                e.txs.push_back(txToBlob(tx));
+            }
         }
     }
 
     // get another transactions, if need
     std::list<Transaction> txs;
-    getTransactions(arg.txs, txs, rsp.missed_ids);
+    if (r) {
+        getTransactions(arg.txs, txs, rsp.missed_ids);
+    } else {
+        get_transactions(arg.txs, txs, rsp.missed_ids);
+    }
+
     // pack aside transactions
     for (const auto &tx : txs) {
-        rsp.txs.push_back(asString(toBinaryArray(tx)));
+        if (r) {
+            rsp.txs.push_back(asString(toBinaryArray(tx)));
+        } else {
+            rsp.txs.push_back(txToBlob(tx));
+        }
     }
+
+    DB_TX_STOP
 
     return true;
 }
@@ -2415,32 +2438,67 @@ bool Blockchain::add_out_to_get_random_outs(
     size_t i)
 {
     std::lock_guard<decltype(m_blockchain_lock)> lk(m_blockchain_lock);
-    const Transaction &tx = transactionByIndex(amount_outs[i].first).tx;
-    if (tx.outputs.size() <= amount_outs[i].second) {
-        logger(ERROR, BRIGHT_RED)
-            << "internal error: in global outs index, transaction out index="
-            << amount_outs[i].second
-            << " more than transaction outputs = "
-            << tx.outputs.size()
-            << ", for tx id = " << getObjectHash(tx);
-        return false;
-    }
-    if (!(tx.outputs[amount_outs[i].second].target.type() == typeid(KeyOutput))) {
-        logger(ERROR, BRIGHT_RED) << "unknown tx out type";
-        return false;
-    }
 
-    // check if transaction is unlocked
-    if (!is_tx_spendtime_unlocked(tx.unlockTime)) {
-        return false;
-    }
+    bool r = Tools::getDefaultDBType() != "lmdb";
 
-    COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::out_entry& oen = *result_outs.outs.insert(
-        result_outs.outs.end(),
-        COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::out_entry()
-    );
-    oen.global_amount_index = static_cast<uint32_t>(i);
-    oen.out_key = boost::get<KeyOutput>(tx.outputs[amount_outs[i].second].target).key;
+    if (r) {
+        const Transaction &tx = transactionByIndex(amount_outs[i].first).tx;
+        if (tx.outputs.size() <= amount_outs[i].second) {
+            logger(ERROR, BRIGHT_RED)
+                    << "internal error: in global outs index, transaction out index="
+                    << amount_outs[i].second
+                    << " more than transaction outputs = "
+                    << tx.outputs.size()
+                    << ", for tx id = " << getObjectHash(tx);
+            return false;
+        }
+        if (!(tx.outputs[amount_outs[i].second].target.type() == typeid(KeyOutput))) {
+            logger(ERROR, BRIGHT_RED) << "unknown tx out type";
+            return false;
+        }
+
+        // check if transaction is unlocked
+        if (!is_tx_spendtime_unlocked(tx.unlockTime)) {
+            return false;
+        }
+
+        COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::out_entry& oen = *result_outs.outs.insert(
+                result_outs.outs.end(),
+                COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::out_entry()
+        );
+        oen.global_amount_index = static_cast<uint32_t>(i);
+        oen.out_key = boost::get<KeyOutput>(tx.outputs[amount_outs[i].second].target).key;
+    } else {
+        std::vector<uint64_t> outsVec;
+        std::pair<Crypto::Hash, uint64_t> hashIndex =
+                mDb->getOutputTxAndIndexFromGlobal(amount_outs[i].first.block);
+        outsVec = mDb->getTxAmountOutputIndices(amount_outs[i].first.block);
+        const Transaction &tx = mDb->getTx(hashIndex.first);
+        if (!(outsVec.size() > amount_outs[i].second)) {
+            logger(ERROR, BRIGHT_RED)
+                << "internal error: in global outs index, transaction out index="
+                << amount_outs[i].second << " more than transaction outputs = "
+                << outsVec.size() << ", for tx: "
+                << Common::podToHex(hashIndex.first);
+
+            return false;
+        }
+
+        if (!(tx.outputs[amount_outs[i].second].target.type() == typeid(KeyOutput))) {
+            logger(ERROR, BRIGHT_RED)
+                << "unknown tx out type";
+
+            return false;
+        }
+        if (!is_tx_spendtime_unlocked(mDb->getTxUnlockTime(hashIndex.first))) {
+            return false;
+        }
+        COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::out_entry& oen =
+                *result_outs.outs.insert(result_outs.outs.end(),
+                                         COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::out_entry());
+        oen.global_amount_index = static_cast<uint32_t>(i);
+        oen.out_key = boost::get<KeyOutput>(tx.outputs[amount_outs[i].second].target).key;
+    }
 
     return true;
 }
@@ -2853,8 +2911,6 @@ bool Blockchain::checkTransactionInputs(
         return false;
     }
 
-
-
     get_block_hash((r ?
                       m_blocks[max_used_block_height].bl :
                       mDb->getBlockFromHeight(max_used_block_height)),
@@ -3152,7 +3208,7 @@ bool Blockchain::check_block_timestamp_main(const Block &b)
     auto delta = HEIGHT_COND - m_currency.timestampCheckWindow(b.majorVersion);
     size_t offset = HEIGHT_COND <= m_currency.timestampCheckWindow(b.majorVersion) ? 0 : delta;
     for (; offset != HEIGHT_COND; ++offset) {
-        timestamps.push_back(m_blocks[offset].bl.timestamp);
+        timestamps.push_back((r ? m_blocks[offset].bl.timestamp : mDb->getBlockTimestamp(offset)));
     }
 
     return check_block_timestamp(std::move(timestamps), b);
@@ -4108,7 +4164,9 @@ void Blockchain::removeLastBlock()
         return;
     }
 
-    logger(DEBUGGING) << "Removing last block with height " << m_blocks.back().height;
+    logger(DEBUGGING)
+        << "Removing last block with height "
+        << (r ? m_blocks.back().height : (mDb->height() - 1));
     if (r) {
         popTransactions(m_blocks.back(),
                         getObjectHash(m_blocks.back().bl.baseTransaction));

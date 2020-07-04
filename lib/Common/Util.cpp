@@ -352,7 +352,7 @@ std::string getDefaultDBType()
 
 std::string getDefaultDBSyncMode()
 {
-    return "fastest:async:1000";
+    return "fastest:async:10000";
 }
 
 bool create_directories_if_necessary(const std::string &path)
