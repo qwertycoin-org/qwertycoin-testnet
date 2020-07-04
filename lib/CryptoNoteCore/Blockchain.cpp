@@ -1342,8 +1342,10 @@ bool Blockchain::getDifficultyStat(uint32_t height,
         break;
     }
     std::lock_guard<decltype(m_blockchain_lock)> lk(m_blockchain_lock);
-    if (height >= m_blocks.size()) {
-        logger (ERROR) << "Invalid height " << height << ", " << m_blocks.size() << " blocks available";
+    bool r = Tools::getDefaultDBType() != "lmdb";
+
+    if (height >= HEIGHT_COND) {
+        logger (ERROR) << "Invalid height " << height << ", " << HEIGHT_COND << " blocks available";
         throw std::runtime_error("Invalid height");
     }
     uint64_t stop_time = m_blocks[height].bl.timestamp - time_window;
@@ -1420,7 +1422,7 @@ uint64_t Blockchain::getMinimalFee(uint32_t height)
         height = 3;
     }
     size_t window = std::min(height,
-                             std::min<uint32_t>(m_blocks.size(),
+                             std::min<uint32_t>(HEIGHT_COND,
                                                 m_currency.expectedNumberOfBlocksPerDay()));
     if (window == 0) {
         ++window;
@@ -1509,8 +1511,10 @@ bool Blockchain::rollback_blockchain_switching(std::list<Block> &original_chain,
                                                size_t rollback_height)
 {
     std::lock_guard<decltype(m_blockchain_lock)> lk(m_blockchain_lock);
+
+    bool r = Tools::getDefaultDBType() != "lmdb";
     // remove failed subchain
-    for (size_t i = m_blocks.size() - 1; i >= rollback_height; i--) {
+    for (size_t i = HEIGHT_COND - 1; i >= rollback_height; i--) {
         popBlock();
     }
 
@@ -1518,8 +1522,8 @@ bool Blockchain::rollback_blockchain_switching(std::list<Block> &original_chain,
     for (auto &bl : original_chain) {
         block_verification_context bvc =
         boost::value_initialized<block_verification_context>();
-        bool r = pushBlock(bl, bvc);
-        if (!(r && bvc.m_added_to_main_chain)) {
+        bool R = pushBlock(bl, bvc);
+        if (!(R && bvc.m_added_to_main_chain)) {
             logger(ERROR, BRIGHT_RED)
                 << "PANIC!!! failed to add (again) block while "
                 << "chain switching during the rollback!";
@@ -1750,7 +1754,7 @@ bool Blockchain::switch_to_alternative_blockchain(
 
     logger(INFO, BRIGHT_GREEN)
         << "REORGANIZE SUCCESS! on height: " << split_height
-        << ", new blockchain size: " << m_blocks.size();
+        << ", new blockchain size: " << HEIGHT_COND;
 
     return true;
 }
@@ -2023,7 +2027,7 @@ bool Blockchain::complete_timestamps_vector(
     if (!(start_top_height < HEIGHT_COND)) {
         logger(ERROR, BRIGHT_RED)
             << "internal error: passed start_height = " << start_top_height
-            << " not less then m_blocks.size()=" << m_blocks.size();
+            << " not less then m_blocks.size()=" << HEIGHT_COND;
         return false;
     }
 
@@ -2126,7 +2130,7 @@ bool Blockchain::handle_alternative_block(
         // main chain -- that is, if we're adding on to an alternate chain
         if (alt_chain.size()) {
             // make sure alt chain doesn't somehow start past the end of the main chain
-            if (m_blocks.size() <= alt_chain.front()->second.height) {
+            if (HEIGHT_COND <= alt_chain.front()->second.height) {
                 logger(ERROR, BRIGHT_RED) << "main blockchain wrong height";
                 return false;
             }
@@ -2243,7 +2247,7 @@ bool Blockchain::handle_alternative_block(
             // TODO: do reorganize!
             logger(INFO, BRIGHT_GREEN)
                 << "###### REORGANIZE on height: " << alt_chain.front()->second.height
-                << " of " << m_blocks.size() - 1
+                << " of " << HEIGHT_COND - 1
                 << ", checkpoint is found in alternative chain on height " << bei.height;
             bool R = switch_to_alternative_blockchain(alt_chain, true);
             if (R) {
@@ -2261,7 +2265,7 @@ bool Blockchain::handle_alternative_block(
             // TODO: do reorganize!
             logger(INFO, BRIGHT_GREEN)
                 << "###### REORGANIZE on height: " << alt_chain.front()->second.height
-                << " of " << m_blocks.size() - 1
+                << " of " << HEIGHT_COND - 1
                 << " with cum_difficulty "
                 << (r ?
                           m_blocks.back().cumulative_difficulty :
@@ -2335,11 +2339,13 @@ bool Blockchain::getBlocks(
 bool Blockchain::getBlocks(uint32_t start_offset, uint32_t count, std::list<Block> &blocks)
 {
     std::lock_guard<decltype(m_blockchain_lock)> lk(m_blockchain_lock);
-    if (start_offset >= m_blocks.size()) {
+    bool r = Tools::getDefaultDBType() != "lmdb";
+
+    if (start_offset >= HEIGHT_COND) {
         return false;
     }
 
-    for (uint32_t i = start_offset; i < start_offset + count && i < m_blocks.size(); i++) {
+    for (uint32_t i = start_offset; i < start_offset + count && i < HEIGHT_COND; i++) {
         blocks.push_back(m_blocks[i].bl);
     }
 
@@ -2649,7 +2655,7 @@ void Blockchain::print_blockchain(uint64_t start_index, uint64_t end_index)
     if (start_index >= HEIGHT_COND) {
         logger(INFO, BRIGHT_WHITE)
             << "Wrong starter index set: " << start_index
-            << ", expected max index " << m_blocks.size() - 1;
+            << ", expected max index " << HEIGHT_COND - 1;
         return;
     }
 
@@ -2843,7 +2849,7 @@ bool Blockchain::checkTransactionInputs(
     if (!(max_used_block_height < HEIGHT_COND)) {
         logger(ERROR, BRIGHT_RED)
                 << "internal error: max used block index=" << max_used_block_height
-                << " is not less then blockchain size = " << m_blocks.size();
+                << " is not less then blockchain size = " << HEIGHT_COND;
         return false;
     }
 
@@ -3134,6 +3140,7 @@ uint64_t Blockchain::get_adjusted_time()
 
 bool Blockchain::check_block_timestamp_main(const Block &b)
 {
+    bool r = Tools::getDefaultDBType() != "lmdb";
     if (b.timestamp > get_adjusted_time() + m_currency.blockFutureTimeLimit(b.majorVersion)) {
         logger(INFO, BRIGHT_WHITE)
             << "Timestamp of block with id: " << get_block_hash(b) << ", "
@@ -3142,9 +3149,9 @@ bool Blockchain::check_block_timestamp_main(const Block &b)
     }
 
     std::vector<uint64_t> timestamps;
-    auto delta = m_blocks.size() - m_currency.timestampCheckWindow(b.majorVersion);
-    size_t offset = m_blocks.size() <= m_currency.timestampCheckWindow(b.majorVersion) ? 0 : delta;
-    for (; offset != m_blocks.size(); ++offset) {
+    auto delta = HEIGHT_COND - m_currency.timestampCheckWindow(b.majorVersion);
+    size_t offset = HEIGHT_COND <= m_currency.timestampCheckWindow(b.majorVersion) ? 0 : delta;
+    for (; offset != HEIGHT_COND; ++offset) {
         timestamps.push_back(m_blocks[offset].bl.timestamp);
     }
 
@@ -3512,7 +3519,7 @@ bool Blockchain::pushBlock(
     block.transactions.push_back(entry);
     block.transactions[0].tx = block.bl.baseTransaction;
     TransactionIndex transactionIndex = {
-        static_cast<uint32_t>(m_blocks.size()),
+        static_cast<uint32_t>(HEIGHT_COND),
         static_cast<uint16_t>(0)
     };
     pushTransaction(block, minerTransactionHash, transactionIndex);
