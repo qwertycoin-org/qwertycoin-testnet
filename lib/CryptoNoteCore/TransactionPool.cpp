@@ -929,11 +929,13 @@ bool tx_memory_pool::addTransactionInputs(
                 return false;
             }
             auto ins_res = kei_image_set.insert(id);
+            /*
             if (!(ins_res.second)) {
                 logger(ERROR, BRIGHT_RED)
                     << "internal error: try to insert duplicate iterator in key_image set";
                 return false;
             }
+             */
         } else if (in.type() == typeid(MultisignatureInput)) {
             if (!keptByBlock) {
                 const auto &msig = boost::get<MultisignatureInput>(in);

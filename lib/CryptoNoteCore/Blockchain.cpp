@@ -61,10 +61,11 @@ static const struct
     uint8_t threshold;
 } mainnetHardforks[] = {
         {  1,      1,      0 },
-        {  2,  40000,      0 },
-        {  3,  46000,      0 },
-        {  4, 110520,      0 },
-        {  5, 250720,      0 }
+        {  2,  CryptoNote::parameters::UPGRADE_HEIGHT_V2,      0 },
+        {  3,  CryptoNote::parameters::UPGRADE_HEIGHT_V3,      0 },
+        {  4, CryptoNote::parameters::UPGRADE_HEIGHT_V4,      0 },
+        {  5, CryptoNote::parameters::UPGRADE_HEIGHT_V5,      0 },
+        {  6, CryptoNote::parameters::UPGRADE_HEIGHT_V6,      0 }
 };
 
 namespace {
@@ -398,11 +399,11 @@ Blockchain::Blockchain(std::unique_ptr<BlockchainDB> &db,
       m_currency(currency),
       m_tx_pool(tx_pool),
       m_current_block_cumul_sz_limit(0),
-      m_upgradeDetectorV2(currency, m_blocks, BLOCK_MAJOR_VERSION_2, logger),
-      m_upgradeDetectorV3(currency, m_blocks, BLOCK_MAJOR_VERSION_3, logger),
-      m_upgradeDetectorV4(currency, m_blocks, BLOCK_MAJOR_VERSION_4, logger),
-      m_upgradeDetectorV5(currency, m_blocks, BLOCK_MAJOR_VERSION_5, logger),
-      m_upgradeDetectorV6(currency, m_blocks, BLOCK_MAJOR_VERSION_6, logger),
+      m_upgradeDetectorV2(currency, m_blocks, *mDb, BLOCK_MAJOR_VERSION_2, logger),
+      m_upgradeDetectorV3(currency, m_blocks, *mDb, BLOCK_MAJOR_VERSION_3, logger),
+      m_upgradeDetectorV4(currency, m_blocks, *mDb, BLOCK_MAJOR_VERSION_4, logger),
+      m_upgradeDetectorV5(currency, m_blocks, *mDb, BLOCK_MAJOR_VERSION_5, logger),
+      m_upgradeDetectorV6(currency, m_blocks, *mDb, BLOCK_MAJOR_VERSION_6, logger),
       m_checkpoints(logger),
       m_paymentIdIndex(blockchainIndexesEnabled),
       m_timestampIndex(blockchainIndexesEnabled),
@@ -815,45 +816,70 @@ bool Blockchain::init(const std::string &config_folder,
     if (!checkUpgradeHeight(m_upgradeDetectorV2)) {
         uint32_t upgradeHeight = m_upgradeDetectorV2.upgradeHeight();
         assert(upgradeHeight != UpgradeDetectorBase::UNDEF_HEIGHT);
+        Block block = storageType ? m_blocks[upgradeHeight + 1].bl :
+                                  mDb->getBlockFromHeight(upgradeHeight + 1);
         logger(WARNING, BRIGHT_YELLOW)
             << "Invalid block version at " << upgradeHeight + 1
-            << ": real=" << static_cast<int>(m_blocks[upgradeHeight + 1].bl.majorVersion)
+            << ": real="
+            << static_cast<int>((Tools::getDefaultDBType() != "lmdb") ?
+                                                m_blocks[upgradeHeight + 1].bl.majorVersion :
+                                                block.majorVersion)
             << " expected=" << static_cast<int>(m_upgradeDetectorV2.targetVersion())
             << ". Rollback blockchain to height=" << upgradeHeight;
         rollbackBlockchainTo(upgradeHeight);
         reinitUpgradeDetectors = true;
     } else if (!checkUpgradeHeight(m_upgradeDetectorV3)) {
         uint32_t upgradeHeight = m_upgradeDetectorV3.upgradeHeight();
+        Block block = storageType ? m_blocks[upgradeHeight + 1].bl :
+                      mDb->getBlockFromHeight(upgradeHeight + 1);
         logger(WARNING, BRIGHT_YELLOW)
-            << "Invalid block version at " << upgradeHeight + 1
-            << ": real=" << static_cast<int>(m_blocks[upgradeHeight + 1].bl.majorVersion)
+                << "Invalid block version at " << upgradeHeight + 1
+                << ": real="
+                << static_cast<int>(storageType ?
+                                    m_blocks[upgradeHeight + 1].bl.majorVersion :
+                                    block.majorVersion)
             << " expected=" << static_cast<int>(m_upgradeDetectorV3.targetVersion())
             << ". Rollback blockchain to height=" << upgradeHeight;
         rollbackBlockchainTo(upgradeHeight);
         reinitUpgradeDetectors = true;
     } else if (!checkUpgradeHeight(m_upgradeDetectorV4)) {
         uint32_t upgradeHeight = m_upgradeDetectorV4.upgradeHeight();
+        Block block = storageType ? m_blocks[upgradeHeight + 1].bl :
+                      mDb->getBlockFromHeight(upgradeHeight + 1);
         logger(WARNING, BRIGHT_YELLOW)
-            << "Invalid block version at " << upgradeHeight + 1
-            << ": real=" << static_cast<int>(m_blocks[upgradeHeight + 1].bl.majorVersion)
+                << "Invalid block version at " << upgradeHeight + 1
+                << ": real="
+                << static_cast<int>(storageType ?
+                                    m_blocks[upgradeHeight + 1].bl.majorVersion :
+                                    block.majorVersion)
             << " expected=" << static_cast<int>(m_upgradeDetectorV4.targetVersion())
             << ". Rollback blockchain to height=" << upgradeHeight;
         rollbackBlockchainTo(upgradeHeight);
         reinitUpgradeDetectors = true;
     } else if (!checkUpgradeHeight(m_upgradeDetectorV5)) {
         uint32_t upgradeHeight = m_upgradeDetectorV5.upgradeHeight();
+        Block block = storageType ? m_blocks[upgradeHeight + 1].bl :
+                      mDb->getBlockFromHeight(upgradeHeight + 1);
         logger(WARNING, BRIGHT_YELLOW)
-            << "Invalid block version at " << upgradeHeight + 1
-            << ": real=" << static_cast<int>(m_blocks[upgradeHeight + 1].bl.majorVersion)
+                << "Invalid block version at " << upgradeHeight + 1
+                << ": real="
+                << static_cast<int>(storageType ?
+                                    m_blocks[upgradeHeight + 1].bl.majorVersion :
+                                    block.majorVersion)
             << " expected=" << static_cast<int>(m_upgradeDetectorV5.targetVersion())
             << ". Rollback blockchain to height=" << upgradeHeight;
         rollbackBlockchainTo(upgradeHeight);
         reinitUpgradeDetectors = true;
     } else if (!checkUpgradeHeight(m_upgradeDetectorV6)) {
         uint32_t upgradeHeight = m_upgradeDetectorV6.upgradeHeight();
+        Block block = storageType ? m_blocks[upgradeHeight + 1].bl :
+                      mDb->getBlockFromHeight(upgradeHeight + 1);
         logger(WARNING, BRIGHT_YELLOW)
-            << "Invalid block version at " << upgradeHeight + 1
-            << ": real=" << static_cast<int>(m_blocks[upgradeHeight + 1].bl.majorVersion)
+                << "Invalid block version at " << upgradeHeight + 1
+                << ": real="
+                << static_cast<int>(storageType ?
+                                    m_blocks[upgradeHeight + 1].bl.majorVersion :
+                                    block.majorVersion)
             << " expected=" << static_cast<int>(m_upgradeDetectorV6.targetVersion())
             << ". Rollback blockchain to height=" << upgradeHeight;
         rollbackBlockchainTo(upgradeHeight);
@@ -3575,7 +3601,7 @@ bool Blockchain::pushBlock(
     block.transactions.push_back(entry);
     block.transactions[0].tx = block.bl.baseTransaction;
     TransactionIndex transactionIndex = {
-        static_cast<uint32_t>(HEIGHT_COND),
+        static_cast<uint32_t>(HEIGHT_COND - 1),
         static_cast<uint16_t>(0)
     };
     pushTransaction(block, minerTransactionHash, transactionIndex);
@@ -3920,7 +3946,7 @@ void Blockchain::popTransaction(const Transaction &transaction, const Crypto::Ha
             auto amountOutputs = m_outputs.find(output.amount);
             if (amountOutputs == m_outputs.end()) {
                 logger(ERROR, BRIGHT_RED)
-                    <<"Blockchain consistency broken - cannot find specific amount in outputs map.";
+                    <<"Blockchain consistency broken - cannot find specific amount in outputs map. L3948";
                 continue;
             }
 
@@ -3950,7 +3976,7 @@ void Blockchain::popTransaction(const Transaction &transaction, const Crypto::Ha
             auto amountOutputs = m_multisignatureOutputs.find(output.amount);
             if (amountOutputs == m_multisignatureOutputs.end()) {
                 logger(ERROR, BRIGHT_RED)
-                    <<"Blockchain consistency broken - cannot find specific amount in outputs map.";
+                    <<"Blockchain consistency broken - cannot find specific amount in outputs map. L3978";
                 continue;
             }
 
