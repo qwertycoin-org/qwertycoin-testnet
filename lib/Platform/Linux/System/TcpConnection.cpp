@@ -19,6 +19,7 @@
 #include <arpa/inet.h>
 #include <cassert>
 #include <sys/epoll.h>
+#include <stdexcept>
 #include <unistd.h>
 #include <System/ErrorMessage.h>
 #include <System/InterruptedException.h>
