@@ -49,6 +49,8 @@ struct MultisignatureInput;
 struct KeyInput;
 struct TransactionPrefixInfo;
 struct tx_verification_context;
+class Blockchain;
+class BlockchainDB;
 
 class ICore
 {
@@ -70,6 +72,11 @@ public:
         CryptoNote::block_verification_context &bvc,
         bool control_miner,
         bool relay_block) = 0;
+    virtual bool handle_incoming_block(const Block &block,
+                                       CryptoNote::block_verification_context &bvc,
+                                       BlockchainDB &db,
+                                       bool control_miner,
+                                       bool relay_block) = 0;
     virtual bool handle_get_objects( // TODO: Deprecated. Should be removed with CryptoNoteProtocolHandler.
         NOTIFY_REQUEST_GET_OBJECTS_request &arg,
         NOTIFY_RESPONSE_GET_OBJECTS_request &rsp) = 0;
@@ -217,6 +224,7 @@ public:
     virtual bool removeMessageQueue(MessageQueue<BlockchainMessage> &messageQueue) = 0;
 
     virtual void rollbackBlockchain(const uint32_t height) = 0;
+    virtual Blockchain &getBlockchainStorage() = 0;
 };
 
 } // namespace CryptoNote

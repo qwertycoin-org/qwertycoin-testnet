@@ -60,7 +60,11 @@ public:
 
     bool hasBlock(const Crypto::Hash &h) const
     {
-        return m_index.find(h) != m_index.end();
+        if (m_index.find(h) != m_index.end()) {
+            return true;
+        }
+
+        return false;
     }
 
     bool getBlockHeight(const Crypto::Hash &h, uint32_t &height) const

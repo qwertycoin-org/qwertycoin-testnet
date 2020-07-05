@@ -19,17 +19,26 @@
 // along with Qwertycoin.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <future>
+
 #include <boost/scope_exit.hpp>
 #include <boost/uuid/uuid_io.hpp>
+
+#include <Common/Util.h>
+
+#include <CryptoNoteCore/Blockchain.h>
 #include <CryptoNoteCore/CryptoNoteBasicImpl.h>
 #include <CryptoNoteCore/CryptoNoteFormatUtils.h>
 #include <CryptoNoteCore/CryptoNoteTools.h>
 #include <CryptoNoteCore/Currency.h>
 #include <CryptoNoteCore/VerificationContext.h>
+
 #include <CryptoNoteProtocol/CryptoNoteProtocolHandler.h>
+
 #include <Global/Constants.h>
 #include <Global/CryptoNoteConfig.h>
+
 #include <P2p/LevinProtocol.h>
+
 #include <System/Dispatcher.h>
 
 using namespace Logging;
@@ -338,7 +347,9 @@ int CryptoNoteProtocolHandler::handle_notify_new_block(int command,
     }
 
     block_verification_context bvc = boost::value_initialized<block_verification_context>();
-    m_core.handle_incoming_block_blob(asBinaryArray(arg.b.block), bvc, true, false);
+    Block b;
+    bool parse = parseAndValidateBlockFromBlob(arg.b.block, b);
+    m_core.handle_incoming_block(b, bvc, m_core.getBlockchainStorage().getDb(), true, false);
     if (bvc.m_verification_failed) {
         logger(Logging::DEBUGGING) << context << "Block verification failed, dropping connection";
         m_p2p->drop_connection(context, true);
@@ -649,11 +660,15 @@ int CryptoNoteProtocolHandler::handle_request_chain(int command,
         return 1;
     }
 
-      NOTIFY_RESPONSE_CHAIN_ENTRY::request r;
-      r.m_block_ids = m_core.findBlockchainSupplement(arg.block_ids,
-                                                      BLOCKS_IDS_SYNCHRONIZING_DEFAULT_COUNT,
-                                                      r.total_height,
-                                                      r.start_height);
+    NOTIFY_RESPONSE_CHAIN_ENTRY::request r;
+    bool blocks = false;
+    if (Tools::getDefaultDBType() == "lmdb") {
+        blocks = m_core.getBlockchainStorage().findBlockchainSupplement(arg.block_ids, r);
+    } else {
+        blocks = m_core.getBlockchainStorage().findBlockchainSupplement(arg.block_ids);
+    }
+
+    r.m_block_ids = arg.block_ids;
 
     logger(Logging::TRACE)
         << context

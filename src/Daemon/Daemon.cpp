@@ -415,8 +415,22 @@ int main(int argc, char *argv[])
         logger(INFO) << "P2p server initialized OK";
 
         // initialize core here
+        bool loadExisting = false;
+        boost::filesystem::path folder(coreConfig.configFolder);
+        r = coreConfig.dbType == "lmdb";
+        if (!r) {
+            if (boost::filesystem::exists(folder / "blockindexes.bin")) {
+                loadExisting = true;
+            }
+        } else if (r) {
+            boost::filesystem::path dbFolder = folder / "lmdb";
+            if (boost::filesystem::exists(dbFolder / "data.mdb")) {
+                loadExisting = true;
+            }
+        }
+
         logger(INFO) << "Initializing core...";
-        if (!ccore.init(coreConfig, minerConfig, true)) {
+        if (!ccore.init(coreConfig, minerConfig, loadExisting)) {
             logger(ERROR, BRIGHT_RED) << "Failed to initialize core";
             return 1;
         }
