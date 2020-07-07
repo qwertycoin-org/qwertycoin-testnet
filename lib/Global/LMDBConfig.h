@@ -27,11 +27,7 @@ const size_t MAX_DIRTY = 1000;
 /*!
  * min. available/empty room in the db
  */
-<<<<<<< HEAD
 const size_t MAPSIZE_MIN_AVAIL = 64 * Qwertycoin::Constants::MEGABYTE;
-=======
-const size_t MAPSIZE_MIN_AVAIL = 64 * Constants::MEGABYTE;
->>>>>>> Add LMDB files
 
 /*!
  * Shift << n / MEGABYTE =

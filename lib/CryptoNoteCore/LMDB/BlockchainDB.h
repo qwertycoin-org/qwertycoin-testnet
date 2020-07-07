@@ -13,11 +13,7 @@
 
 #include <Common/CommandLine.h>
 
-<<<<<<< HEAD
 #include <crypto/hash.h>
-=======
-#include <crypto/Hash.h>
->>>>>>> Add LMDB files
 
 #include <CryptoNoteCore/CryptoNoteFormatUtils.h>
 #include <CryptoNoteCore/Currency.h>
@@ -301,10 +297,6 @@ private:
                           const size_t &blockSize,
                           const uint64_t &cumulativeDifficulty,
                           const uint64_t &coinsGenerated,
-<<<<<<< HEAD
-=======
-                          const uint64_t &transactionsGenerated,
->>>>>>> Add LMDB files
                           const Crypto::Hash &blockHash) = 0;
 
     /*!
@@ -316,10 +308,6 @@ private:
      *                        const size_t &blockSize,
      *                        const uint64_t &cumulativeDifficulty,
      *                        const uint64_t &coinsGenerated,
-<<<<<<< HEAD
-=======
-     *                        const uint64_t &transactionsGenerated,
->>>>>>> Add LMDB files
      *                        const Crypto::Hash &blockHash)
      *
      * If any of this cannot be done, the subclass should throw the corresponding
@@ -725,10 +713,6 @@ public:
                               const size_t &blockSize,
                               const uint64_t &cumulativeDifficulty,
                               const uint64_t &coinsGenerated,
-<<<<<<< HEAD
-=======
-                              const uint64_t &transactionsGenerated,
->>>>>>> Add LMDB files
                               const std::vector<CryptoNote::Transaction> &txs);
 
     /*!
@@ -911,11 +895,7 @@ public:
      *
      * @return the already generated transactions
      */
-<<<<<<< HEAD
     // virtual uint64_t getBlockAlreadyGeneratedTransactions(const uint64_t &height) const = 0;
-=======
-    virtual uint64_t getBlockAlreadyGeneratedTransactions(const uint64_t &height) const = 0;
->>>>>>> Add LMDB files
 
     /*!
      * @brief fetch a block's hash
