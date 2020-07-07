@@ -32,14 +32,6 @@ class ISerializer;
 
 class BlockIndex
 {
-    typedef boost::multi_index_container <
-        Crypto::Hash,
-        boost::multi_index::indexed_by<
-            boost::multi_index::random_access<>,
-            boost::multi_index::hashed_unique<boost::multi_index::identity<Crypto::Hash>>
-        >
-    > ContainerT;
-
 public:
     BlockIndex()
         : m_index(m_container.get<1>())
@@ -107,6 +99,14 @@ public:
     void serialize(ISerializer &s);
 
 private:
+    typedef boost::multi_index_container <
+            Crypto::Hash,
+            boost::multi_index::indexed_by<
+                    boost::multi_index::random_access<>,
+                    boost::multi_index::hashed_unique<boost::multi_index::identity<Crypto::Hash>>
+            >
+    > ContainerT;
+
     ContainerT m_container;
     ContainerT::nth_index<1>::type &m_index;
 };

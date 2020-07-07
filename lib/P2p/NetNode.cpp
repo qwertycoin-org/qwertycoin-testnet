@@ -1833,7 +1833,7 @@ void NodeServer::connectionHandler(const boost::uuids::uuid &connectionId,
             logger(TRACE) << ctx << "Exception in connectionHandler: " << e.what();
         }
 
-        ctx.interrupt();
+        // ctx.interrupt();
         writeContext.interrupt();
         writeContext.get();
 

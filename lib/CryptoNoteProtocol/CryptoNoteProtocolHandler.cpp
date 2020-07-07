@@ -141,11 +141,14 @@ bool CryptoNoteProtocolHandler::start_sync(CryptoNoteConnectionContext &context)
     logger(Logging::TRACE) << context << "Starting synchronization";
 
     if (context.m_state == CryptoNoteConnectionContext::state_synchronizing) {
-        assert(context.m_needed_objects.empty());
+        //assert(context.m_needed_objects.empty());
+        //assert(context.m_requested_objects.empty());
 
-        assert(context.m_requested_objects.empty());
+        context.m_needed_objects.clear();
+        context.m_requested_objects.clear();
 
         NOTIFY_REQUEST_CHAIN::request r = boost::value_initialized<NOTIFY_REQUEST_CHAIN::request>();
+
         r.block_ids = m_core.buildSparseChain();
         logger(Logging::TRACE)
             << context
@@ -483,6 +486,8 @@ int CryptoNoteProtocolHandler::handle_response_get_objects(
 
     context.m_remote_blockchain_height = arg.current_blockchain_height;
 
+    m_core.getBlockchainStorage().prepareHandleIncomingBlocks(arg.blocks);
+
     size_t count = 0;
     for (const block_complete_entry& block_entry : arg.blocks) {
         ++count;
@@ -599,28 +604,58 @@ int CryptoNoteProtocolHandler::processObjects(CryptoNoteConnectionContext &conte
 
         // process block
         block_verification_context bvc = boost::value_initialized<block_verification_context>();
-        m_core.handle_incoming_block_blob(asBinaryArray(block_entry.block), bvc, false, false);
+        bool handled = m_core.handle_incoming_block_blob(asBinaryArray(block_entry.block),
+                                                         bvc,
+                                                         true,
+                                                         false);
+        if (!handled) {
+            if (bvc.m_verification_failed) {
+                logger(ERROR, BRIGHT_RED)
+                    << context
+                    << "Block verification failed, we probably already have this block";
+                size_t count = 0;
+                size_t startHeight = m_core.getBlockchainStorage().getCurrentBlockchainHeight() +
+                                     context.m_needed_objects.size();
+                size_t offset = context.m_remote_blockchain_height - startHeight;
+                std::list<Crypto::Hash>::iterator it = context.m_needed_objects.begin();
 
-        if (bvc.m_verification_failed) {
-            logger(Logging::DEBUGGING)
-                << context
-                << "Block verification failed, dropping connection";
-            context.m_state = CryptoNoteConnectionContext::state_shutdown;
-            return 1;
-        } else if (bvc.m_marked_as_orphaned) {
-            logger(Logging::INFO)
-                << context
-                << "Block received at sync phase was marked as orphaned, dropping connection";
-            context.m_state = CryptoNoteConnectionContext::state_shutdown;
-            return 1;
-        } else if (bvc.m_already_exists) {
-            logger(Logging::DEBUGGING)
-                << context
-                << "Block already exists, switching to idle state";
-            context.m_state = CryptoNoteConnectionContext::state_idle;
-            context.m_needed_objects.clear();
-            context.m_requested_objects.clear();
-            return 1;
+                NOTIFY_REQUEST_CHAIN::request r;
+                NOTIFY_REQUEST_GET_OBJECTS::request req;
+
+                while (it != context.m_needed_objects.end() &&
+                       count < BLOCKS_SYNCHRONIZING_DEFAULT_COUNT) {
+                    req.blocks.push_back(*it);
+                    ++count;
+                    context.m_needed_objects.push_back(*it);
+                }
+
+                logger(Logging::TRACE)
+                    << context
+                    << "-->>NOTIFY_REQUEST_GET_OBJECTS: blocks.size()="
+                    << req.blocks.size()
+                    << ", txs.size()="
+                    << req.txs.size();
+                post_notify<NOTIFY_REQUEST_GET_OBJECTS>(*m_p2p, req, context);
+                context.m_state = CryptoNoteConnectionContext::state_shutdown;
+
+                return 1;
+            } else if (bvc.m_marked_as_orphaned) {
+                logger(Logging::INFO)
+                    << context
+                    << "Block received at sync phase was marked as orphaned, dropping connection";
+                context.m_state = CryptoNoteConnectionContext::state_shutdown;
+
+                return 1;
+            } else if (bvc.m_already_exists) {
+                logger(Logging::DEBUGGING)
+                        << context
+                        << "Block already exists, switching to idle state";
+                context.m_state = CryptoNoteConnectionContext::state_idle;
+                context.m_needed_objects.clear();
+                context.m_requested_objects.clear();
+
+                return 1;
+            }
         }
 
         m_dispatcher.yield();

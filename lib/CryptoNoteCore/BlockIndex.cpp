@@ -102,7 +102,8 @@ bool BlockIndex::findSupplement(const std::vector<Crypto::Hash> &ids,
 
 std::vector<Crypto::Hash> BlockIndex::buildSparseChain(const Crypto::Hash &startBlockId) const
 {
-    assert(m_index.count(startBlockId) > 0);
+    // assert(m_index.count(startBlockId) > 0);
+
 
     uint32_t startBlockHeight;
     getBlockHeight(startBlockId, startBlockHeight);

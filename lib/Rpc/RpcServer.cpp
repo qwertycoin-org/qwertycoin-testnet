@@ -888,7 +888,7 @@ bool RpcServer::onGetBlocksHashesByTimestamps(
     try {
         uint32_t count;
         std::vector<Crypto::Hash> blockHashes;
-        if (!m_core.get_blockchain_storage().getBlockIdsByTimestamp(req.timestampBegin,
+        if (!m_core.getBlockchainStorage().getBlockIdsByTimestamp(req.timestampBegin,
                                                                     req.timestampEnd,
                                                                     req.limit,
                                                                     blockHashes,

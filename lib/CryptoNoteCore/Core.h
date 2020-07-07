@@ -271,8 +271,6 @@ public:
     void pause_mining() override;
     void update_block_template_and_resume_mining() override;
 
-    Blockchain &get_blockchain_storage() { return m_blockchain; }
-
     // debug functions
     void print_blockchain(uint32_t start_index, uint32_t end_index);
     void print_blockchain_index();
