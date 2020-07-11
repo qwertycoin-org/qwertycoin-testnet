@@ -26,16 +26,11 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include <cassert>
-#include <limits>
 #include <stdexcept>
 
 #include <boost/thread/thread.hpp>
 
 #include <Common/ThreadPool.h>
-#include <Common/Util.h>
-
-#include <Global/CryptoNoteConfig.h>
 
 static __thread int depth = 0;
 
