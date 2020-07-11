@@ -170,6 +170,7 @@ public:
     void setConsolidateHeight(uint32_t height) override;
     uint32_t getConsolidateHeight() const override;
 
+    void markTransactionSafe(const Crypto::Hash &transactionHash) override;
 private:
     // IBlockchainSynchronizerObserver
     void synchronizationProgressUpdated(uint32_t current, uint32_t total) override;
@@ -211,7 +212,7 @@ private:
     std::atomic<uint64_t> m_lastNotifiedUnmixableBalance;
 
     BlockchainSynchronizer m_blockchainSync;
-    TransfersSyncronizer m_transfersSync;
+    TransfersSynchronizer m_transfersSync;
     ITransfersContainer *m_transferDetails;
 
     WalletUserTransactionsCache m_transactionsCache;

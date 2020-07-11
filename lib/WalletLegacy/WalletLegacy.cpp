@@ -300,7 +300,8 @@ void WalletLegacy::initSync()
 {
     AccountSubscription sub;
     sub.keys = reinterpret_cast<const AccountKeys &>(m_account.getAccountKeys());
-    sub.transactionSpendableAge = CryptoNote::parameters::CRYPTONOTE_TX_SPENDABLE_AGE;
+    sub.transactionSpendableAge = m_currency.transactionSpendableAge();
+    sub.safeTransactionSpendableAge = m_currency.safeTransactionSpendableAge();
     sub.syncStart.height = m_transactionsCache.getConsolidateHeight();
     sub.syncStart.timestamp = m_account.get_createtime() - ACCOUNT_CREATE_TIME_ACCURACY;
 
@@ -1199,6 +1200,12 @@ void WalletLegacy::setConsolidateHeight(uint32_t height)
 uint32_t WalletLegacy::getConsolidateHeight() const
 {
     return m_transactionsCache.getConsolidateHeight();
+}
+
+void WalletLegacy::markTransactionSafe(const Hash &transactionHash)
+{
+    m_transfersSync.markTransactionSafe(transactionHash);
+    m_transferDetails->markTransactionSafe(transactionHash);
 }
 
 std::vector<TransactionId> WalletLegacy::deleteOutdatedUnconfirmedTransactions()

@@ -42,6 +42,7 @@ public:
     uint64_t publicAddressBase58Prefix() const { return m_publicAddressBase58Prefix; }
     size_t minedMoneyUnlockWindow() const { return m_minedMoneyUnlockWindow; }
     size_t transactionSpendableAge() const { return m_transactionSpendableAge; }
+    size_t safeTransactionSpendableAge() const { return m_safeTransactionSpendableAge; }
     size_t expectedNumberOfBlocksPerDay() const { return m_expectedNumberOfBlocksPerDay; }
 
     size_t timestampCheckWindow() const { return m_timestampCheckWindow; }
@@ -279,6 +280,7 @@ private:
     uint64_t m_publicAddressBase58Prefix;
     size_t m_minedMoneyUnlockWindow;
     size_t m_transactionSpendableAge;
+    size_t m_safeTransactionSpendableAge;
     size_t m_expectedNumberOfBlocksPerDay;
 
     size_t m_timestampCheckWindow;
@@ -313,6 +315,7 @@ private:
     size_t m_difficultyWindow;
     size_t m_difficultyLag;
     size_t m_difficultyCut;
+    difficulty_type m_fixedDifficulty;
 
     size_t m_maxBlockSizeInitial;
     uint64_t m_maxBlockSizeGrowthSpeedNumerator;
@@ -392,6 +395,11 @@ public:
     CurrencyBuilder &transactionSpendableAge(size_t val)
     {
         m_currency.m_transactionSpendableAge = val;
+        return *this;
+    }
+    CurrencyBuilder &safeTransactionSpendableAge(size_t val)
+    {
+        m_currency.m_safeTransactionSpendableAge = val;
         return *this;
     }
     CurrencyBuilder &expectedNumberOfBlocksPerDay(size_t val)
@@ -606,6 +614,8 @@ public:
     }
 
     CurrencyBuilder &testnet(bool val) { m_currency.m_testnet = val; return *this; }
+
+    CurrencyBuilder &fix_difficulty(difficulty_type val) { m_currency.m_fixedDifficulty = val; return *this; }
 
 private:
     Currency m_currency;
