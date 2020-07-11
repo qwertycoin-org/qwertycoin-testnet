@@ -29,6 +29,7 @@
 #pragma once
 
 #include <cstddef>
+#include <deque>
 #include <functional>
 #include <stdexcept>
 #include <utility>
