@@ -2585,36 +2585,128 @@ bool RpcServer::on_get_difficulty_stat(const COMMAND_RPC_GET_DIFFICULTY_STAT::re
                                        res.hour.block_num,
                                        res.hour.avg_solve_time,
                                        res.hour.stddev_solve_time,
-                                       res.hour.outliers_num))
+                                       res.hour.outliers_num,
+                                       res.hour.avg_diff,
+                                       res.hour.min_diff,
+                                       res.hour.max_diff))
             throw std::runtime_error("Failed to get hour difficulty statistics");
         if(!m_core.get_difficulty_stat(req.height,
                                        IMinerHandler::stat_period::day,
                                        res.day.block_num,
                                        res.day.avg_solve_time,
                                        res.day.stddev_solve_time,
-                                       res.day.outliers_num))
+                                       res.day.outliers_num,
+                                       res.day.avg_diff,
+                                       res.day.min_diff,
+                                       res.day.max_diff))
             throw std::runtime_error("Failed to get day difficulty statistics");
         if(!m_core.get_difficulty_stat(req.height,
                                        IMinerHandler::stat_period::week,
                                        res.week.block_num,
                                        res.week.avg_solve_time,
                                        res.week.stddev_solve_time,
-                                       res.week.outliers_num))
+                                       res.week.outliers_num,
+                                       res.week.avg_diff,
+                                       res.week.min_diff,
+                                       res.week.max_diff))
             throw std::runtime_error("Failed to get week difficulty statistics");
         if(!m_core.get_difficulty_stat(req.height,
                                        IMinerHandler::stat_period::month,
                                        res.month.block_num,
                                        res.month.avg_solve_time,
                                        res.month.stddev_solve_time,
-                                       res.month.outliers_num))
+                                       res.month.outliers_num,
+                                       res.month.avg_diff,
+                                       res.month.min_diff,
+                                       res.month.max_diff))
             throw std::runtime_error("Failed to get month difficulty statistics");
+        if(!m_core.get_difficulty_stat(req.height,
+                                       IMinerHandler::stat_period::halfyear,
+                                       res.halfyear.block_num,
+                                       res.halfyear.avg_solve_time,
+                                       res.halfyear.stddev_solve_time,
+                                       res.halfyear.outliers_num,
+                                       res.halfyear.avg_diff,
+                                       res.halfyear.min_diff,
+                                       res.halfyear.max_diff))
+            throw std::runtime_error("Failed to get halfyear difficulty statistics");
         if(!m_core.get_difficulty_stat(req.height,
                                        IMinerHandler::stat_period::year,
                                        res.year.block_num,
                                        res.year.avg_solve_time,
                                        res.year.stddev_solve_time,
-                                       res.year.outliers_num))
-            throw std::runtime_error("Failed to get month difficulty statistics");
+                                       res.year.outliers_num,
+                                       res.year.avg_diff,
+                                       res.year.min_diff,
+                                       res.year.max_diff))
+            throw std::runtime_error("Failed to get year difficulty statistics");
+
+        res.blocks30.block_num = 30;
+        if(!m_core.get_difficulty_stat(req.height,
+                                       IMinerHandler::stat_period::by_block_number,
+                                       res.blocks30.block_num,
+                                       res.blocks30.avg_solve_time,
+                                       res.blocks30.stddev_solve_time,
+                                       res.blocks30.outliers_num,
+                                       res.blocks30.avg_diff,
+                                       res.blocks30.min_diff,
+                                       res.blocks30.max_diff))
+            throw std::runtime_error("Failed to get difficulty statistics for 30 blocks");
+        res.blocks720.block_num = 720;
+        if(!m_core.get_difficulty_stat(req.height,
+                                       IMinerHandler::stat_period::by_block_number,
+                                       res.blocks720.block_num,
+                                       res.blocks720.avg_solve_time,
+                                       res.blocks720.stddev_solve_time,
+                                       res.blocks720.outliers_num,
+                                       res.blocks720.avg_diff,
+                                       res.blocks720.min_diff,
+                                       res.blocks720.max_diff))
+            throw std::runtime_error("Failed to get difficulty statistics for 720 blocks");
+        res.blocks5040.block_num = 5040;
+        if(!m_core.get_difficulty_stat(req.height,
+                                       IMinerHandler::stat_period::by_block_number,
+                                       res.blocks5040.block_num,
+                                       res.blocks5040.avg_solve_time,
+                                       res.blocks5040.stddev_solve_time,
+                                       res.blocks5040.outliers_num,
+                                       res.blocks5040.avg_diff,
+                                       res.blocks5040.min_diff,
+                                       res.blocks5040.max_diff))
+            throw std::runtime_error("Failed to get difficulty statistics for 5040 blocks");
+        res.blocks21900.block_num = 21900;
+        if(!m_core.get_difficulty_stat(req.height,
+                                       IMinerHandler::stat_period::by_block_number,
+                                       res.blocks21900.block_num,
+                                       res.blocks21900.avg_solve_time,
+                                       res.blocks21900.stddev_solve_time,
+                                       res.blocks21900.outliers_num,
+                                       res.blocks21900.avg_diff,
+                                       res.blocks21900.min_diff,
+                                       res.blocks21900.max_diff))
+            throw std::runtime_error("Failed to get difficulty statistics for 21900 blocks");
+        res.blocks131400.block_num = 131400;
+        if(!m_core.get_difficulty_stat(req.height,
+                                       IMinerHandler::stat_period::by_block_number,
+                                       res.blocks131400.block_num,
+                                       res.blocks131400.avg_solve_time,
+                                       res.blocks131400.stddev_solve_time,
+                                       res.blocks131400.outliers_num,
+                                       res.blocks131400.avg_diff,
+                                       res.blocks131400.min_diff,
+                                       res.blocks131400.max_diff))
+            throw std::runtime_error("Failed to get difficulty statistics for 131400 blocks");
+        res.blocks262800.block_num = 262800;
+        if(!m_core.get_difficulty_stat(req.height,
+                                       IMinerHandler::stat_period::by_block_number,
+                                       res.blocks262800.block_num,
+                                       res.blocks262800.avg_solve_time,
+                                       res.blocks262800.stddev_solve_time,
+                                       res.blocks262800.outliers_num,
+                                       res.blocks262800.avg_diff,
+                                       res.blocks262800.min_diff,
+                                       res.blocks262800.max_diff))
+            throw std::runtime_error("Failed to get difficulty statistics for 262800 blocks");
     } catch (std::system_error &e) {
         res.status = e.what();
         return false;

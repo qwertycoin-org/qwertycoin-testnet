@@ -1312,12 +1312,18 @@ struct difficulty_statistics
         KV_MEMBER(avg_solve_time)
         KV_MEMBER(stddev_solve_time)
         KV_MEMBER(outliers_num)
+        KV_MEMBER(avg_diff)
+        KV_MEMBER(min_diff)
+        KV_MEMBER(max_diff)
     }
 
     uint32_t block_num;
     uint64_t avg_solve_time;
     uint64_t stddev_solve_time;
     uint32_t outliers_num;
+    difficulty_type avg_diff;
+    difficulty_type min_diff;
+    difficulty_type max_diff;
 };
 
 struct COMMAND_RPC_GET_DIFFICULTY_STAT
@@ -1342,7 +1348,14 @@ struct COMMAND_RPC_GET_DIFFICULTY_STAT
             KV_MEMBER(day)
             KV_MEMBER(week)
             KV_MEMBER(month)
+            KV_MEMBER(halfyear)
             KV_MEMBER(year)
+            KV_MEMBER(blocks30)
+            KV_MEMBER(blocks720)
+            KV_MEMBER(blocks5040)
+            KV_MEMBER(blocks21900)
+            KV_MEMBER(blocks131400)
+            KV_MEMBER(blocks262800)
         }
 
         std::string status;
@@ -1350,7 +1363,14 @@ struct COMMAND_RPC_GET_DIFFICULTY_STAT
         difficulty_statistics day;
         difficulty_statistics week;
         difficulty_statistics month;
+        difficulty_statistics halfyear;
         difficulty_statistics year;
+        difficulty_statistics blocks30;
+        difficulty_statistics blocks720;
+        difficulty_statistics blocks5040;
+        difficulty_statistics blocks21900;
+        difficulty_statistics blocks131400;
+        difficulty_statistics blocks262800;
     };
 };
 
