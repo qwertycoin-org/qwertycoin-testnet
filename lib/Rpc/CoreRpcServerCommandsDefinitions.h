@@ -128,6 +128,35 @@ struct COMMAND_RPC_GET_TRANSACTIONS
     };
 };
 
+struct COMMAND_RPC_GET_TRANSACTIONS_BY_HEIGHTS
+{
+    struct request
+    {
+        void serialize(ISerializer &s)
+        {
+            KV_MEMBER(startBlock)
+            KV_MEMBER(additor)
+            KV_MEMBER(sigCut)
+        };
+
+        uint32_t startBlock;
+        uint32_t additor = 100;
+        bool sigCut;
+    };
+
+    struct response
+    {
+        void serialize(ISerializer &s)
+        {
+            KV_MEMBER(status)
+            KV_MEMBER(transactions)
+        }
+
+        std::vector<TransactionDetails2> transactions;
+        std::string status;
+    };
+};
+
 struct COMMAND_RPC_GET_POOL_CHANGES
 {
     struct request
