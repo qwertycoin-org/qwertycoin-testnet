@@ -64,6 +64,7 @@ public:
     bool restrictRPC(const bool is_resctricted);
     bool enableCors(const std::string domain);
     bool setFeeAddress(const std::string &fee_address, const AccountPublicAddress &fee_acc);
+    bool setFeeAmount(const uint64_t fee_amount);
     bool setViewKey(const std::string &view_key);
     bool setContactInfo(const std::string &contact);
     bool masternode_check_incoming_tx(const BinaryArray &tx_blob);
@@ -184,6 +185,9 @@ private:
     bool on_get_block_header_by_height(
         const COMMAND_RPC_GET_BLOCK_HEADER_BY_HEIGHT::request &req,
         COMMAND_RPC_GET_BLOCK_HEADER_BY_HEIGHT::response &res);
+    bool on_resolve_open_alias(
+        const COMMAND_RPC_RESOLVE_OPEN_ALIAS::request &req,
+        COMMAND_RPC_RESOLVE_OPEN_ALIAS::response &res);
 
     void fill_block_header_response(
         const Block &blk,
@@ -247,6 +251,7 @@ private:
     bool m_restricted_rpc;
     std::string m_cors_domain;
     std::string m_fee_address;
+    uint64_t    m_fee_amount;
     std::string m_contact_info;
     Crypto::SecretKey m_view_key = NULL_SECRET_KEY;
     AccountPublicAddress m_fee_acc;

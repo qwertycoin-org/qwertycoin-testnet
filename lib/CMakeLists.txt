@@ -8,6 +8,7 @@ message(STATUS "Generated version.h header: ${CMAKE_CURRENT_BINARY_DIR}/version.
 
 set(QwertycoinFramework_INCLUDE_DIRS
     "${Boost_INCLUDE_DIRS}"
+    "${OPENSSL_INCLUDE_DIR}"
     "${Breakpad_INCLUDE_DIRS}"
     "${MINIUPNP_INCLUDE_DIRS}"
     "${SPARSEHASH_INCLUDE_DIRS}"
@@ -125,6 +126,8 @@ set(QwertycoinFramework_Common_SOURCES
     "${CMAKE_CURRENT_LIST_DIR}/Common/ArrayView.h"
     "${CMAKE_CURRENT_LIST_DIR}/Common/Base58.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/Common/Base58.h"
+    "${CMAKE_CURRENT_LIST_DIR}/Common/Base64.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/Common/Base64.h"
     "${CMAKE_CURRENT_LIST_DIR}/Common/BlockingQueue.h"
     "${CMAKE_CURRENT_LIST_DIR}/Common/CommandLine.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/Common/CommandLine.h"
@@ -134,6 +137,8 @@ set(QwertycoinFramework_Common_SOURCES
     "${CMAKE_CURRENT_LIST_DIR}/Common/ConsoleTools.h"
     "${CMAKE_CURRENT_LIST_DIR}/Common/DnsTools.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/Common/DnsTools.h"
+    "${CMAKE_CURRENT_LIST_DIR}/Common/FormatTools.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/Common/FormatTools.h"
     "${CMAKE_CURRENT_LIST_DIR}/Common/FileMappedVector.h"
     "${CMAKE_CURRENT_LIST_DIR}/Common/IInputStream.h"
     "${CMAKE_CURRENT_LIST_DIR}/Common/IOutputStream.h"
@@ -176,10 +181,10 @@ set(QwertycoinFramework_Common_SOURCES
     "${CMAKE_CURRENT_LIST_DIR}/Common/VectorUtils.h"
     "${CMAKE_CURRENT_LIST_DIR}/Common/int-util.h"
     "${CMAKE_CURRENT_LIST_DIR}/Common/pod-class.h"
-    "${CMAKE_CURRENT_LIST_DIR}/Common/static_assert.h"
-)
+    "${CMAKE_CURRENT_LIST_DIR}/Common/static_assert.h")
 
 set(QwertycoinFramework_Common_LIBS
+    Boost::regex
     Threads::Threads
     QwertycoinFramework::Crypto
     QwertycoinFramework::Global
@@ -483,6 +488,12 @@ set(QwertycoinFramework_NodeRpcProxy_LIBS
     QwertycoinFramework::System
 )
 
+if (BUILD_WITH_SSL)
+    list(APPEND QwertycoinFramework_NodeRpcProxy_LIBS
+            OpenSSL::SSL
+            OpenSSL::Crypto)
+endif()
+
 add_library(QwertycoinFramework_NodeRpcProxy STATIC ${QwertycoinFramework_NodeRpcProxy_SOURCES})
 add_library(QwertycoinFramework::NodeRpcProxy ALIAS QwertycoinFramework_NodeRpcProxy)
 target_include_directories(QwertycoinFramework_NodeRpcProxy PRIVATE ${QwertycoinFramework_INCLUDE_DIRS})
@@ -569,6 +580,7 @@ set(QwertycoinFramework_Rpc_SOURCES
     "${CMAKE_CURRENT_LIST_DIR}/Rpc/CoreRpcServerErrorCodes.h"
     "${CMAKE_CURRENT_LIST_DIR}/Rpc/HttpClient.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/Rpc/HttpClient.h"
+    "${CMAKE_CURRENT_LIST_DIR}/Rpc/HttpRootCerts.h"
     "${CMAKE_CURRENT_LIST_DIR}/Rpc/HttpServer.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/Rpc/HttpServer.h"
     "${CMAKE_CURRENT_LIST_DIR}/Rpc/JsonRpc.cpp"
@@ -577,9 +589,14 @@ set(QwertycoinFramework_Rpc_SOURCES
     "${CMAKE_CURRENT_LIST_DIR}/Rpc/RpcServer.h"
     "${CMAKE_CURRENT_LIST_DIR}/Rpc/RpcServerConfig.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/Rpc/RpcServerConfig.h"
-)
+    )
 
 set(QwertycoinFramework_Rpc_LIBS
+    Boost::atomic
+    Boost::filesystem
+    Boost::regex
+    Boost::system
+    Boost::thread
     QwertycoinFramework::BlockchainExplorer
     QwertycoinFramework::CryptoNoteCore
     QwertycoinFramework::Global
@@ -648,6 +665,8 @@ set(QwertycoinFramework_System_SOURCES
     "${CMAKE_CURRENT_LIST_DIR}/System/RemoteContext.h"
     "${CMAKE_CURRENT_LIST_DIR}/System/RemoteEventLock.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/System/RemoteEventLock.h"
+    "${CMAKE_CURRENT_LIST_DIR}/System/SocketStream.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/System/SocketStream.h"
     "${CMAKE_CURRENT_LIST_DIR}/System/TcpStream.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/System/TcpStream.h"
 )

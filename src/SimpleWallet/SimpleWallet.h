@@ -158,10 +158,6 @@ private:
     bool sign_message(const std::vector<std::string> &args);
     bool verify_message(const std::vector<std::string> &args);
 
-#ifndef __ANDROID__
-    std::string resolveAlias(const std::string &aliasUrl);
-#endif
-
     void printConnectionError() const;
 	uint64_t getMinimalFee();
 
@@ -227,9 +223,16 @@ private:
     std::string m_import_path;
     std::string m_daemon_address;
     std::string m_daemon_host;
+    std::string m_daemon_path;
+    std::string m_daemon_cert;
     std::string m_mnemonic_seed;
+    std::string m_view_key;
+    std::string m_spend_key;
     std::string m_wallet_file;
     uint16_t m_daemon_port;
+    uint32_t m_scan_height;
+    bool m_daemon_ssl;
+    bool m_daemon_no_verify;
     Crypto::SecretKey m_recovery_key; // recovery key (used as random for wallet gen)
     bool m_restore_deterministic_wallet; // recover flag
     bool m_non_deterministic; // old 2-random generation

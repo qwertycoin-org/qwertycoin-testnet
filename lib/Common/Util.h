@@ -29,4 +29,6 @@ bool create_directories_if_necessary(const std::string &path);
 std::error_code replace_file(const std::string &replacement_name, const std::string &replaced_name);
 bool directoryExists(const std::string &path);
 
+bool parseUrlAddress(const std::string& url, std::string& host, uint16_t& port, std::string& path, bool& ssl);
+
 } // namespace Tools

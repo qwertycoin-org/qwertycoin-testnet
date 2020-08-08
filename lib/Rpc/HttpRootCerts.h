@@ -1,5 +1,4 @@
-// Copyright (c) 2017-2018, Karbo developers
-// Copyright (c) 2018-2020, The Qwertycoin Group.
+// Copyright (c) 2017-2019 The Karbowanec developers
 //
 // This file is part of Qwertycoin.
 //
@@ -14,20 +13,8 @@
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with Qwertycoin. If not, see <http://www.gnu.org/licenses/>.
+// along with Qwertycoin.  If not, see <http://www.gnu.org/licenses/>.
 
 #pragma once
 
-#include <string>
-#include <vector>
-
-namespace Common {
-
-#ifndef __ANDROID__
-bool fetch_dns_txt(const std::string &domain, std::vector<std::string> &records);
-bool processServerAliasResponse(const std::string &s, std::string &address);
-std::string resolveAlias(const std::string &aliasUrl);
-std::vector<std::string> resolveAliases(const std::string &aliasUrl);
-#endif
-
-} // namespace Common
+unsigned char root_crts[] = {};

@@ -260,7 +260,7 @@ bool MinerManager::submitBlock(
     uint16_t daemonPort)
 {
     try {
-        HttpClient client(m_dispatcher, daemonHost, daemonPort);
+        HttpClient client(m_dispatcher, daemonHost, daemonPort, false);
 
         COMMAND_RPC_SUBMITBLOCK::request request;
         request.emplace_back(Common::toHex(toBinaryArray(minedBlock)));
@@ -290,7 +290,7 @@ BlockMiningParameters MinerManager::requestMiningParameters(
     const std::string &miningAddress)
 {
     try {
-        HttpClient client(dispatcher, daemonHost, daemonPort);
+        HttpClient client(dispatcher, daemonHost, daemonPort, false);
 
         COMMAND_RPC_GETBLOCKTEMPLATE::request request;
         request.wallet_address = miningAddress;

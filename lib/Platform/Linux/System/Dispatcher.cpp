@@ -18,6 +18,7 @@
 
 #include <cassert>
 #include <fcntl.h>
+#include <stdexcept>
 #include <string.h>
 #include <sys/epoll.h>
 #include <sys/eventfd.h>

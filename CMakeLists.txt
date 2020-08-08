@@ -106,6 +106,10 @@ include(external/MiniUPnP)
 include(external/sparsehash)
 include(external/Threads)
 
+if(BUILD_WITH_SSL)
+    include(external/Secure)
+endif()
+
 add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/lib")
 
 if(BUILD_WITH_TOOLS)
