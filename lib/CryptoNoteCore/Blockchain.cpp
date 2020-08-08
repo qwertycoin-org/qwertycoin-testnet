@@ -22,6 +22,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <iterator>
 #include <limits>
 #include <numeric>
 #include <boost/foreach.hpp>
@@ -1398,18 +1399,18 @@ difficulty_type Blockchain::get_next_difficulty_for_alternative_chain(
         std::vector<difficulty_type> diffs;
         uint32_t height = bei.height;
         if (!alt_chain.empty()) {
-            auto alt_it = alt_chain.back();
-            auto next_alt_it = std::prev(alt_it);
+            auto alt_it = alt_chain.rbegin();
+            auto next_alt_it = std::next(alt_it);
             while (height > min_height &&
-                   alt_it != alt_chain.front() &&
-                   next_alt_it->second.bl.timestamp >= stop_time)
+                   next_alt_it != alt_chain.rend() &&
+                   (*next_alt_it)->second.bl.timestamp >= stop_time)
             {
-                diffs.push_back(alt_it->second.cumulative_difficulty - next_alt_it->second.cumulative_difficulty);
+                diffs.push_back((*alt_it)->second.cumulative_difficulty - (*next_alt_it)->second.cumulative_difficulty);
                 alt_it = next_alt_it;
-                next_alt_it = std::prev(alt_it);
+                next_alt_it = std::next(alt_it);
                 height--;
             }
-            if (alt_it->second.bl.timestamp >= stop_time) {
+            if (alt_chain.front()->second.bl.timestamp >= stop_time) {
                 // not enough blocks in alt chain,  continue on main chain
                 while (height > min_height && m_blocks[height - 1].bl.timestamp >= stop_time)
                 {
