@@ -1101,16 +1101,11 @@ difficulty_type Currency::getClifDifficulty(uint32_t height,
     if (new_diff > CryptoNote::parameters::DEFAULT_DIFFICULTY) {
         uint64_t correction_interval = currentSolveTime -
                 CryptoNote::parameters::CRYPTONOTE_CLIF_THRESHOLD;
-        int decrease_counter = 0;
-        while (correction_interval > 0) {
-            new_diff = new_diff / 2;
-            decrease_counter++;
-            if (correction_interval < CryptoNote::parameters::DIFFICULTY_TARGET)
-                break;
-            if (new_diff <= CryptoNote::parameters::DEFAULT_DIFFICULTY)
-                break;
-            correction_interval -= CryptoNote::parameters::DIFFICULTY_TARGET;
-        }
+        //below equation shall return quotient of the division.
+        int decrease_counter = ((int)correction_interval / (int)CryptoNote::parameters::DIFFICULTY_TARGET) + 1;
+        int round_counter = 1;
+
+        new_diff = new_diff / 2;
         logger (INFO) << "CLIF descreased difficulty by 2^" << decrease_counter <<
                          " times, intermediate difficulty is " << new_diff;
         difficulty_type mean_diff = lazy_stat_cb(IMinerHandler::stat_period::hour, last_timestamp);
@@ -1137,6 +1132,15 @@ difficulty_type Currency::getClifDifficulty(uint32_t height,
         logger (INFO) << "Last year average difficulty is " << mean_diff;
         if (mean_diff > 0)
             new_diff = std::min(mean_diff, new_diff);
+
+        if (decrease_counter > 1) {
+            while (round_counter < decrease_counter) {
+                new_diff = new_diff / 2;
+                round_counter++;
+            }
+            logger (INFO) << "CLIF decreased difficulty " << round_counter <<
+                             " times, intermediate difficulty is " << new_diff;
+        }
 
         new_diff = std::max(new_diff, difficulty_type(CryptoNote::parameters::DEFAULT_DIFFICULTY));
     }
