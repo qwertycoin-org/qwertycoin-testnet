@@ -274,7 +274,7 @@ void HttpClient::connect()
             tcp::resolver::query query(hostname, std::to_string(this->m_port));
             boost::asio::connect(this->m_sslSock->lowest_layer(), resolver.resolve(query));
 #if defined(_WIN32)
-            sockSetup((SOCKET &)this->m_ssl_sock->lowest_layer().native_handle());
+            sockSetup((SOCKET &)this->m_sslSock->lowest_layer().native_handle());
 #endif
             this->m_sslSock->lowest_layer().set_option(tcp::no_delay(true));
             this->m_sslSock->lowest_layer().set_option(boost::asio::socket_base::keep_alive(true));
