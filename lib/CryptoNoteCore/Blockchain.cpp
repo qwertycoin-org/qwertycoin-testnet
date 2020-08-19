@@ -2795,7 +2795,9 @@ bool Blockchain::pushBlock(
 
     auto longhashTimeStart = std::chrono::steady_clock::now();
     Crypto::Hash proof_of_work = NULL_HASH;
-    if (m_checkpoints.is_in_checkpoint_zone(getCurrentBlockchainHeight())) {
+    if (m_checkpoints.is_in_checkpoint_zone(getCurrentBlockchainHeight())
+        || (   getCurrentBlockchainHeight() > CryptoNote::parameters::UPGRADE_HEIGHT_V4
+            && getCurrentBlockchainHeight() <= CryptoNote::parameters::UPGRADE_HEIGHT_V5)) {
         if (!m_checkpoints.check_block(getCurrentBlockchainHeight(), blockHash)) {
             logger(ERROR, BRIGHT_RED) << "CHECKPOINT VALIDATION FAILED";
             bvc.m_verification_failed = true;
