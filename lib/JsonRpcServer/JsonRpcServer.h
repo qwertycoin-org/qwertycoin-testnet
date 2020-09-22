@@ -47,13 +47,22 @@ class HttpRequest;
 class JsonRpcServer : HttpServer
 {
 public:
-    JsonRpcServer(System::Dispatcher &sys, System::Event &stopEvent, Logging::ILogger &loggerGroup);
+    JsonRpcServer(System::Dispatcher &sys,
+                  System::Event &stopEvent,
+                  Logging::ILogger &loggerGroup);
     JsonRpcServer(const JsonRpcServer &) = delete;
+
+    void setCerts(const std::string &chainFile,
+                  const std::string &keyFile,
+                  const std::string &dhFile);
 
     void start(const std::string &bindAddress,
                uint16_t bindPort,
+               uint16_t bindPortSSL,
+               bool serverSSLEnable,
                const std::string &m_rpcUser,
                const std::string &m_rpcPassword);
+
 
 protected:
     static void makeErrorResponse(const std::error_code &ec, Common::JsonValue &resp);
@@ -66,7 +75,6 @@ protected:
     static void makeJsonParsingErrorResponse(Common::JsonValue &resp);
 
     virtual void processJsonRpcRequest(const Common::JsonValue &req, Common::JsonValue &resp) = 0;
-
 private:
     void processRequest(const CryptoNote::HttpRequest &request,
                         CryptoNote::HttpResponse &response) override;

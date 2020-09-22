@@ -173,6 +173,8 @@ public:
         uint64_t &transactionsNumberWithinTimestamps,
         const Callback &callback) = 0;
     virtual void isSynchronized(bool &syncStatus, const Callback &callback) = 0;
+    virtual void setRootCert(const std::string &path) = 0;
+    virtual void disableVerify() = 0;
 };
 
 } // namespace CryptoNote

@@ -104,10 +104,6 @@ const std::string nonWindowsAsciiArt =
     const std::string asciiArt = nonWindowsAsciiArt;
 #endif
 
-const size_t KILOBYTE = 1024;
-const size_t MEGABYTE = 1024 * KILOBYTE;
-const size_t GIGABYTE = 1024 * MEGABYTE;
-
 } // namespace Constants
 
 /*!
@@ -227,16 +223,7 @@ const size_t maxBodyResponseSize = 1024 * 1024 * 10;
 /*!
     The amount of memory to use storing downloaded blocks - 50MB
 */
-const size_t blockStoreMemoryLimit = 50 * Constants::MEGABYTE;
-
-const size_t TIMESTAMP_MAX_WIDTH = 19;
-const size_t HASH_MAX_WIDTH = 64;
-const size_t TOTAL_AMOUNT_MAX_WIDTH = 22;
-const size_t FEE_MAX_WIDTH = 14;
-const size_t BLOCK_MAX_WIDTH = 7;
-const size_t UNLOCK_TIME_MAX_WIDTH = 11;
-const size_t MESSAGE_MAX_WIDTH = 128;
-const size_t SENDER_MAX_WITH = 16;
+const size_t blockStoreMemoryLimit = 1024 * 1024 * 50;
 
 } // namespace WalletConfig
 
@@ -260,19 +247,5 @@ inline std::string getProjectCLIHeader()
 
     return programHeader.str();
 }
-
-namespace Hardfork {
-    /*!
-     * Actual Height
-     */
-    const uint64_t DEFAULT_ORIGINAL_VERSION_TILL_HEIGHT = 0;
-
-    /*!
-     * Supermajority window check length - a week
-     */
-    const uint64_t DEFAULT_WINDOW_SIZE = 10080;
-
-    const uint8_t DEFAULT_THRESHOLD_PERCENT = 80;
-} // namespace Hardfork
 
 } // namespace Qwertycoin

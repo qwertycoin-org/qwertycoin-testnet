@@ -106,17 +106,20 @@ include(external/MiniUPnP)
 include(external/sparsehash)
 include(external/Threads)
 
-add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/external")
+if(BUILD_WITH_SSL)
+    include(external/Secure)
+endif()
+
 add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/lib")
 
 if(BUILD_WITH_TOOLS)
     add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/src")
 endif()
 
-#if(BUILD_WITH_TESTS)
-#    enable_testing()
-#    add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/tests")
-#endif()
+if(BUILD_WITH_TESTS)
+    enable_testing()
+    add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/tests")
+endif()
 
 if(BUILD_WITH_PACKAGE)
     include(project/CPackConfig)

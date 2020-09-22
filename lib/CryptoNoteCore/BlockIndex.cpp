@@ -26,7 +26,6 @@ namespace CryptoNote {
 Crypto::Hash BlockIndex::getBlockId(uint32_t height) const
 {
     assert(height < m_container.size());
-
     return m_container[static_cast<size_t>(height)];
 }
 
@@ -49,27 +48,6 @@ std::vector<Crypto::Hash> BlockIndex::getBlockIds(uint32_t startBlockIndex, uint
     return result;
 }
 
-std::vector<Crypto::Hash> BlockIndex::getBlockIds(uint32_t startBlockIndex,
-                                                  uint32_t maxCount,
-                                                  BlockchainDB &mDb) const
-{
-    std::vector<Crypto::Hash> result;
-    if (startBlockIndex >= m_container.size()) {
-        return result;
-    }
-
-    size_t count = std::min(
-            static_cast<size_t>(maxCount),
-            m_container.size() - static_cast<size_t>(startBlockIndex)
-    );
-    result.reserve(count);
-    for (size_t i = 0; i < count; ++i) {
-        result.push_back(m_container[startBlockIndex + i]);
-    }
-
-    return result;
-}
-
 bool BlockIndex::findSupplement(const std::vector<Crypto::Hash> &ids, uint32_t &offset) const
 {
     for (const auto &id : ids) {
@@ -81,29 +59,9 @@ bool BlockIndex::findSupplement(const std::vector<Crypto::Hash> &ids, uint32_t &
     return false;
 }
 
-bool BlockIndex::findSupplement(const std::vector<Crypto::Hash> &ids,
-                    uint32_t &offset,
-                    BlockchainDB &mDb) const
-{
-    // TODO: Check if this should return a vector by reference for offset
-    for (const auto &id : ids) {
-        try {
-            offset = mDb.getBlockHeight(id);
-        } catch (...) {
-            std::exception e;
-            throw e;
-
-            return false;
-        }
-        return true;
-    }
-    return false;
-}
-
 std::vector<Crypto::Hash> BlockIndex::buildSparseChain(const Crypto::Hash &startBlockId) const
 {
-    // assert(m_index.count(startBlockId) > 0);
-
+    assert(m_index.count(startBlockId) > 0);
 
     uint32_t startBlockHeight;
     getBlockHeight(startBlockId, startBlockHeight);
@@ -112,24 +70,6 @@ std::vector<Crypto::Hash> BlockIndex::buildSparseChain(const Crypto::Hash &start
     auto sparseChainEnd = static_cast<size_t>(startBlockHeight + 1);
     for (size_t i = 1; i <= sparseChainEnd; i *= 2) {
         result.emplace_back(m_container[sparseChainEnd - i]);
-    }
-
-    if (result.back() != m_container[0]) {
-        result.emplace_back(m_container[0]);
-    }
-
-    return result;
-}
-
-std::vector<Crypto::Hash> BlockIndex::buildSparseChain(const Crypto::Hash& startBlockId,
-                                           BlockchainDB& mDb) const
-{
-    uint32_t startBlockHeight = mDb.getBlockHeight(startBlockId);
-
-    std::vector<Crypto::Hash> result;
-    size_t sparseChainEnd = static_cast<size_t>(startBlockHeight + 1);
-    for (size_t i = 1; i <= sparseChainEnd; i *= 2) {
-        result.emplace_back(mDb.getBlockHashFromHeight(sparseChainEnd - i));
     }
 
     if (result.back() != m_container[0]) {

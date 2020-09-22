@@ -27,7 +27,6 @@
 #include "CryptoNoteCore/ICoreObserver.h"
 #include "CryptoNoteProtocol/CryptoNoteProtocolDefinitions.h"
 #include <Global/CryptoNoteConfig.h>
-#include <CryptoNoteCore/Blockchain.h>
 #include "Rpc/CoreRpcServerCommandsDefinitions.h"
 
 class ICoreStub: public CryptoNote::ICore {
@@ -66,14 +65,7 @@ public:
   virtual bool on_idle() override { return false; }
   virtual void pause_mining() override {}
   virtual void update_block_template_and_resume_mining() override {}
-  virtual bool handle_incoming_block(const CryptoNote::Block &block,
-                                       CryptoNote::block_verification_context &bvc,
-                                       CryptoNote::BlockchainDB &db,
-                                       bool control_miner,
-                                       bool relay_block) override { return false; }
-  virtual bool handle_incoming_block_blob(const CryptoNote::BinaryArray& block_blob,
-                                          CryptoNote::block_verification_context& bvc,
-                                          bool control_miner, bool relay_block) override { return false; }
+  virtual bool handle_incoming_block_blob(const CryptoNote::BinaryArray& block_blob, CryptoNote::block_verification_context& bvc, bool control_miner, bool relay_block) override { return false; }
   virtual bool handle_get_objects(CryptoNote::NOTIFY_REQUEST_GET_OBJECTS::request& arg, CryptoNote::NOTIFY_RESPONSE_GET_OBJECTS::request& rsp) override { return false; }
   virtual void on_synchronized() override {}
   virtual bool getOutByMSigGIndex(uint64_t amount, uint64_t gindex, CryptoNote::MultisignatureOutput& out) override { return true; }
@@ -126,10 +118,7 @@ public:
 
   void setPoolTxVerificationResult(bool result);
   void setPoolChangesResult(bool result);
-  CryptoNote::Blockchain &getBlockchainStorage() override {
-      CryptoNote::Blockchain m_blockchain = boost::value_initialized<CryptoNote::Blockchain>();
-      return m_blockchain;
-  }
+
 private:
   uint32_t topHeight;
   Crypto::Hash topId;

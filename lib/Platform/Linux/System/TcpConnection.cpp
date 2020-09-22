@@ -18,8 +18,9 @@
 
 #include <arpa/inet.h>
 #include <cassert>
-#include <sys/epoll.h>
+#include <cstdint>
 #include <stdexcept>
+#include <sys/epoll.h>
 #include <unistd.h>
 #include <System/ErrorMessage.h>
 #include <System/InterruptedException.h>

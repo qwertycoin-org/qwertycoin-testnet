@@ -21,21 +21,30 @@
 
 #include <future>
 #include <unordered_map>
+
 #include <BlockchainExplorer/BlockchainExplorerData.h>
-#include <Common/StringTools.h>
+
 #include <Common/Base58.h>
-#include <CryptoNoteCore/TransactionUtils.h>
-#include <CryptoNoteCore/CryptoNoteTools.h>
-#include <CryptoNoteCore/CryptoNoteFormatUtils.h>
+#include <Common/DnsTools.h>
+#include <Common/Math.h>
+#include <Common/StringTools.h>
+
 #include <CryptoNoteCore/Core.h>
+#include <CryptoNoteCore/CryptoNoteFormatUtils.h>
+#include <CryptoNoteCore/CryptoNoteTools.h>
 #include <CryptoNoteCore/IBlock.h>
 #include <CryptoNoteCore/Miner.h>
 #include <CryptoNoteCore/TransactionExtra.h>
+#include <CryptoNoteCore/TransactionUtils.h>
+
 #include <CryptoNoteProtocol/ICryptoNoteProtocolQuery.h>
+
 #include <P2p/NetNode.h>
+
 #include <Rpc/CoreRpcServerErrorCodes.h>
 #include <Rpc/JsonRpc.h>
 #include <Rpc/RpcServer.h>
+
 #include <version.h>
 
 #undef ERROR // TODO: WTF!?
@@ -44,24 +53,18 @@ using namespace Crypto;
 using namespace Common;
 using namespace Logging;
 
-static const Crypto::SecretKey I = {{
-    0x01, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00
-}};
+static const Crypto::SecretKey I = { { 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                                       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                                       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                                       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 } };
 
 namespace CryptoNote {
 
 namespace {
 
-template <typename Command>
-RpcServer::HandlerFunction binMethod(
-    bool (RpcServer::*handler)(typename Command::request const &, typename Command::response &))
+template<typename Command>
+RpcServer::HandlerFunction binMethod(bool (RpcServer::*handler)(typename Command::request const &,
+                                                                typename Command::response &))
 {
     return [handler](RpcServer *obj, const HttpRequest &request, HttpResponse &response) {
         boost::value_initialized<typename Command::request> req;
@@ -79,9 +82,9 @@ RpcServer::HandlerFunction binMethod(
     };
 }
 
-template <typename Command>
-RpcServer::HandlerFunction jsonMethod(
-    bool (RpcServer::*handler)(typename Command::request const &, typename Command::response &))
+template<typename Command>
+RpcServer::HandlerFunction jsonMethod(bool (RpcServer::*handler)(typename Command::request const &,
+                                                                 typename Command::response &))
 {
     return [handler](RpcServer *obj, const HttpRequest &request, HttpResponse &response) {
         boost::value_initialized<typename Command::request> req;
@@ -95,7 +98,8 @@ RpcServer::HandlerFunction jsonMethod(
         std::string cors_domain = obj->getCorsDomain();
         if (!cors_domain.empty()) {
             response.addHeader("Access-Control-Allow-Origin", cors_domain);
-            response.addHeader("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+            response.addHeader("Access-Control-Allow-Headers",
+                               "Origin, X-Requested-With, Content-Type, Accept");
             response.addHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
         }
         response.addHeader("Content-Type", "application/json");
@@ -107,192 +111,121 @@ RpcServer::HandlerFunction jsonMethod(
 
 } // namespace
 
-std::unordered_map<
-    std::string,
-    RpcServer::RpcHandler<RpcServer::HandlerFunction>
-> RpcServer::s_handlers = {
-    // binary handlers
-    {
-        "/getblocks.bin",
-        { binMethod<COMMAND_RPC_GET_BLOCKS_FAST>(&RpcServer::on_get_blocks), false }
-    },{
-        "/queryblocks.bin",
-        { binMethod<COMMAND_RPC_QUERY_BLOCKS>(&RpcServer::on_query_blocks), false }
-    },{
-        "/queryblockslite.bin",
-        { binMethod<COMMAND_RPC_QUERY_BLOCKS_LITE>(&RpcServer::on_query_blocks_lite), false }
-    },
+std::unordered_map<std::string, RpcServer::RpcHandler<RpcServer::HandlerFunction>>
+        RpcServer::s_handlers = {
+            // binary handlers
+            { "/getblocks.bin",
+              { binMethod<COMMAND_RPC_GET_BLOCKS_FAST>(&RpcServer::on_get_blocks), false } },
+            { "/queryblocks.bin",
+              { binMethod<COMMAND_RPC_QUERY_BLOCKS>(&RpcServer::on_query_blocks), false } },
+            { "/queryblockslite.bin",
+              { binMethod<COMMAND_RPC_QUERY_BLOCKS_LITE>(&RpcServer::on_query_blocks_lite),
+                false } },
 
-    {
-        "/get_o_indexes.bin",
-        { binMethod<COMMAND_RPC_GET_TX_GLOBAL_OUTPUTS_INDEXES>(&RpcServer::on_get_indexes), false }
-    },{
-        "/getrandom_outs.bin",
-        {
-            binMethod<COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS>(&RpcServer::on_get_random_outs),
-            false
-        }
-    },{
-        "/get_pool_changes.bin",
-        { binMethod<COMMAND_RPC_GET_POOL_CHANGES>(&RpcServer::onGetPoolChanges), false }
-    },{
-        "/get_pool_changes_lite.bin",
-        { binMethod<COMMAND_RPC_GET_POOL_CHANGES_LITE>(&RpcServer::onGetPoolChangesLite), false }
-    },
+            { "/get_o_indexes.bin",
+              { binMethod<COMMAND_RPC_GET_TX_GLOBAL_OUTPUTS_INDEXES>(&RpcServer::on_get_indexes),
+                false } },
+            { "/getrandom_outs.bin",
+              { binMethod<COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS>(
+                        &RpcServer::on_get_random_outs),
+                false } },
+            { "/get_pool_changes.bin",
+              { binMethod<COMMAND_RPC_GET_POOL_CHANGES>(&RpcServer::onGetPoolChanges), false } },
+            { "/get_pool_changes_lite.bin",
+              { binMethod<COMMAND_RPC_GET_POOL_CHANGES_LITE>(&RpcServer::onGetPoolChangesLite),
+                false } },
 
-    // json handlers
-    {
-        "/getinfo",
-        { jsonMethod<COMMAND_RPC_GET_INFO>(&RpcServer::on_get_info), true }
-    },{
-        "/getheight",
-        { jsonMethod<COMMAND_RPC_GET_HEIGHT>(&RpcServer::on_get_height), true }
-    },{
-        "/gettransactions",
-        { jsonMethod<COMMAND_RPC_GET_TRANSACTIONS>(&RpcServer::on_get_transactions), false }
-    },{
-        "/sendrawtransaction",
-        { jsonMethod<COMMAND_RPC_SEND_RAW_TX>(&RpcServer::on_send_raw_tx), false }
-    },{
-        "/feeaddress",
-        { jsonMethod<COMMAND_RPC_GET_FEE_ADDRESS>(&RpcServer::on_get_fee_address), true }
-    },{
-        "/peers",
-        { jsonMethod<COMMAND_RPC_GET_PEER_LIST>(&RpcServer::on_get_peer_list), true }
-    },{
-        "/paymentid",
-        { jsonMethod<COMMAND_RPC_GEN_PAYMENT_ID>(&RpcServer::on_get_payment_id), true }
-    },
+            // json handlers
+            { "/getinfo", { jsonMethod<COMMAND_RPC_GET_INFO>(&RpcServer::on_get_info), true } },
+            { "/getheight",
+              { jsonMethod<COMMAND_RPC_GET_HEIGHT>(&RpcServer::on_get_height), true } },
+            { "/gettransactions",
+              { jsonMethod<COMMAND_RPC_GET_TRANSACTIONS>(&RpcServer::on_get_transactions),
+                false } },
+            { "/sendrawtransaction",
+              { jsonMethod<COMMAND_RPC_SEND_RAW_TX>(&RpcServer::on_send_raw_tx), false } },
+            { "/feeaddress",
+              { jsonMethod<COMMAND_RPC_GET_FEE_ADDRESS>(&RpcServer::on_get_fee_address), true } },
+            { "/peers",
+              { jsonMethod<COMMAND_RPC_GET_PEER_LIST>(&RpcServer::on_get_peer_list), true } },
+            { "/paymentid",
+              { jsonMethod<COMMAND_RPC_GEN_PAYMENT_ID>(&RpcServer::on_get_payment_id), true } },
 
-    {
-        "/getpeers",
-        { jsonMethod<COMMAND_RPC_GET_PEER_LIST>(&RpcServer::on_get_peer_list), true }
-    },{
-        "/getblocks",
-        { jsonMethod<COMMAND_RPC_GET_BLOCKS_FAST>(&RpcServer::on_get_blocks), false }
-    },
+            { "/getpeers",
+              { jsonMethod<COMMAND_RPC_GET_PEER_LIST>(&RpcServer::on_get_peer_list), true } },
+            { "/getblocks",
+              { jsonMethod<COMMAND_RPC_GET_BLOCKS_FAST>(&RpcServer::on_get_blocks), false } },
 
-    {
-        "/queryblocks",
-        { jsonMethod<COMMAND_RPC_QUERY_BLOCKS>(&RpcServer::on_query_blocks), false }
-    },{
-        "/queryblockslite",
-        { jsonMethod<COMMAND_RPC_QUERY_BLOCKS_LITE>(&RpcServer::on_query_blocks_lite), false }
-    },{
-        "/queryblocksdetailed",
-        {
-            jsonMethod<COMMAND_RPC_QUERY_BLOCKS_DETAILED>(&RpcServer::on_query_blocks_detailed),
-            false
-        }
-    },
+            { "/queryblocks",
+              { jsonMethod<COMMAND_RPC_QUERY_BLOCKS>(&RpcServer::on_query_blocks), false } },
+            { "/queryblockslite",
+              { jsonMethod<COMMAND_RPC_QUERY_BLOCKS_LITE>(&RpcServer::on_query_blocks_lite),
+                false } },
+            { "/queryblocksdetailed",
+              { jsonMethod<COMMAND_RPC_QUERY_BLOCKS_DETAILED>(&RpcServer::on_query_blocks_detailed),
+                false } },
 
-    {
-        "/get_o_indexes",
-        { jsonMethod<COMMAND_RPC_GET_TX_GLOBAL_OUTPUTS_INDEXES>(&RpcServer::on_get_indexes), false }
-    },{
-        "/getrandom_outs",
-        {
-            jsonMethod<COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS>(&RpcServer::on_get_random_outs),
-            false
-        }
-    },{
-        "/get_pool_changes",
-        { jsonMethod<COMMAND_RPC_GET_POOL_CHANGES>(&RpcServer::onGetPoolChanges), false }
-    },{
-        "/get_pool_changes_lite",
-        { jsonMethod<COMMAND_RPC_GET_POOL_CHANGES_LITE>(&RpcServer::onGetPoolChangesLite), false }
-    },{
-        "/get_block_details_by_height",
-        {
-            jsonMethod<
-                COMMAND_RPC_GET_BLOCK_DETAILS_BY_HEIGHT
-                >(&RpcServer::onGetBlockDetailsByHeight),
-            false
-        }
-    },{
-        "/get_blocks_details_by_heights",
-        {
-            jsonMethod<
-                COMMAND_RPC_GET_BLOCKS_DETAILS_BY_HEIGHTS
-                >(&RpcServer::onGetBlocksDetailsByHeights),
-            false
-        }
-    },{
-        "/get_blocks_details_by_hashes",
-        {
-            jsonMethod<
-                COMMAND_RPC_GET_BLOCKS_DETAILS_BY_HASHES
-                >(&RpcServer::onGetBlocksDetailsByHashes),
-            false
-        }
-    },{
-        "/get_blocks_hashes_by_timestamps",
-        {
-            jsonMethod<
-                COMMAND_RPC_GET_BLOCKS_HASHES_BY_TIMESTAMPS
-                >(&RpcServer::onGetBlocksHashesByTimestamps),
-            false
-        }
-    },{
-        "/get_transaction_details_by_hashes",
-        {
-            jsonMethod<
-                COMMAND_RPC_GET_TRANSACTIONS_DETAILS_BY_HASHES
-                >(&RpcServer::onGetTransactionsDetailsByHashes),
-            false
-        }
-    },{
-        "/get_transaction_details_by_heights",
-        {
-            jsonMethod<
-                COMMAND_RPC_GET_TRANSACTIONS_BY_HEIGHTS
-                >(
+            { "/get_o_indexes",
+              { jsonMethod<COMMAND_RPC_GET_TX_GLOBAL_OUTPUTS_INDEXES>(&RpcServer::on_get_indexes),
+                false } },
+            { "/getrandom_outs",
+              { jsonMethod<COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS>(
+                        &RpcServer::on_get_random_outs),
+                false } },
+            { "/get_pool_changes",
+              { jsonMethod<COMMAND_RPC_GET_POOL_CHANGES>(&RpcServer::onGetPoolChanges), false } },
+            { "/get_pool_changes_lite",
+              { jsonMethod<COMMAND_RPC_GET_POOL_CHANGES_LITE>(&RpcServer::onGetPoolChangesLite),
+                false } },
+            { "/get_block_details_by_height",
+              { jsonMethod<COMMAND_RPC_GET_BLOCK_DETAILS_BY_HEIGHT>(
+                        &RpcServer::onGetBlockDetailsByHeight),
+                false } },
+            { "/get_blocks_details_by_heights",
+              { jsonMethod<COMMAND_RPC_GET_BLOCKS_DETAILS_BY_HEIGHTS>(
+                        &RpcServer::onGetBlocksDetailsByHeights),
+                false } },
+            { "/get_blocks_details_by_hashes",
+              { jsonMethod<COMMAND_RPC_GET_BLOCKS_DETAILS_BY_HASHES>(
+                        &RpcServer::onGetBlocksDetailsByHashes),
+                false } },
+            { "/get_blocks_hashes_by_timestamps",
+              { jsonMethod<COMMAND_RPC_GET_BLOCKS_HASHES_BY_TIMESTAMPS>(
+                        &RpcServer::onGetBlocksHashesByTimestamps),
+                false } },
+            { "/get_transaction_details_by_hashes",
+              { jsonMethod<COMMAND_RPC_GET_TRANSACTIONS_DETAILS_BY_HASHES>(
+                        &RpcServer::onGetTransactionsDetailsByHashes),
+                false } },
+            { "/get_transaction_details_by_heights",
+              { jsonMethod<COMMAND_RPC_GET_TRANSACTIONS_BY_HEIGHTS>(
                         &RpcServer::onGetTransactionsByHeights),
-            false
-        }
-    },{
-        "/get_transaction_hashes_by_payment_id",
-        {
-            jsonMethod<
-                COMMAND_RPC_GET_TRANSACTION_HASHES_BY_PAYMENT_ID
-                >(&RpcServer::onGetTransactionHashesByPaymentId),
-            false
-        }
-    },
+                false } },
+            { "/get_transaction_hashes_by_payment_id",
+              { jsonMethod<COMMAND_RPC_GET_TRANSACTION_HASHES_BY_PAYMENT_ID>(
+                        &RpcServer::onGetTransactionHashesByPaymentId),
+                false } },
 
-    // disabled in restricted rpc mode
-    {
-        "/start_mining",
-        { jsonMethod<COMMAND_RPC_START_MINING>(&RpcServer::on_start_mining), false }
-    },{
-        "/stop_mining",
-        { jsonMethod<COMMAND_RPC_STOP_MINING>(&RpcServer::on_stop_mining), false }
-    },{
-        "/stop_daemon",
-        { jsonMethod<COMMAND_RPC_STOP_DAEMON>(&RpcServer::on_stop_daemon), true }
-    },{
-        "/get_difficulty_stat",
-        { jsonMethod<COMMAND_RPC_GET_DIFFICULTY_STAT>(&RpcServer::on_get_difficulty_stat), false }
-    },
+            // disabled in restricted rpc mode
+            { "/start_mining",
+              { jsonMethod<COMMAND_RPC_START_MINING>(&RpcServer::on_start_mining), false } },
+            { "/stop_mining",
+              { jsonMethod<COMMAND_RPC_STOP_MINING>(&RpcServer::on_stop_mining), false } },
+            { "/stop_daemon",
+              { jsonMethod<COMMAND_RPC_STOP_DAEMON>(&RpcServer::on_stop_daemon), true } },
+            { "/get_difficulty_stat",
+              { jsonMethod<COMMAND_RPC_GET_DIFFICULTY_STAT>(&RpcServer::on_get_difficulty_stat),
+                false } },
 
-    // json rpc
-    {
-        "/json_rpc",
-        {
-            std::bind(&RpcServer::processJsonRpcRequest,
-                      std::placeholders::_1,
-                      std::placeholders::_2,
-                      std::placeholders::_3),
-            true
-        }
-    }
-};
+            // json rpc
+            { "/json_rpc",
+              { std::bind(&RpcServer::processJsonRpcRequest, std::placeholders::_1,
+                          std::placeholders::_2, std::placeholders::_3),
+                true } }
+        };
 
-RpcServer::RpcServer(System::Dispatcher &dispatcher,
-                     Logging::ILogger &log,
-                     core &c,
-                     NodeServer &p2p,
-                     const ICryptoNoteProtocolQuery &protocolQuery)
+RpcServer::RpcServer(System::Dispatcher &dispatcher, Logging::ILogger &log, core &c,
+                     NodeServer &p2p, const ICryptoNoteProtocolQuery &protocolQuery)
     : HttpServer(dispatcher, log),
       logger(log, "RpcServer"),
       m_core(c),
@@ -329,7 +262,8 @@ bool RpcServer::processJsonRpcRequest(const HttpRequest &request, HttpResponse &
     response.addHeader("Content-Type", "application/json");
     if (!m_cors_domain.empty()) {
         response.addHeader("Access-Control-Allow-Origin", m_cors_domain);
-        response.addHeader("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+        response.addHeader("Access-Control-Allow-Headers",
+                           "Origin, X-Requested-With, Content-Type, Accept");
         response.addHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
     }
 
@@ -342,99 +276,61 @@ bool RpcServer::processJsonRpcRequest(const HttpRequest &request, HttpResponse &
         jsonRequest.parseRequest(request.getBody());
         jsonResponse.setId(jsonRequest.getId()); // copy id
 
-        static std::unordered_map<
-            std::string,
-            RpcServer::RpcHandler<JsonMemberMethod>
-        > jsonRpcHandlers = {
-            {
-                "getblockcount",
-                { makeMemberMethod(&RpcServer::on_getblockcount), true }
-            },{
-                "on_getblockhash",
-                { makeMemberMethod(&RpcServer::on_getblockhash), false }
-            },{
-                "getblocktemplate",
-                { makeMemberMethod(&RpcServer::on_getblocktemplate), false }
-            },{
-                "getcurrencyid",
-                { makeMemberMethod(&RpcServer::on_get_currency_id), true }
-            },{
-                "submitblock",
-                { makeMemberMethod(&RpcServer::on_submitblock), false }
-            },{
-                "getlastblockheader",
-                { makeMemberMethod(&RpcServer::on_get_last_block_header), false }
-            },{
-                "getblockheaderbyhash",
-                { makeMemberMethod(&RpcServer::on_get_block_header_by_hash), false }
-            },{
-                "getblockheaderbyheight",
-                { makeMemberMethod(&RpcServer::on_get_block_header_by_height), false }
-            },{
-                "f_blocks_list_json",
-                { makeMemberMethod(&RpcServer::f_on_blocks_list_json), false }
-            },{
-                "f_block_json",
-                { makeMemberMethod(&RpcServer::f_on_block_json), false }
-            },{
-                "f_transaction_json",
-                { makeMemberMethod(&RpcServer::f_on_transaction_json), false }
-            },{
-                "f_on_transactions_pool_json",
-                { makeMemberMethod(&RpcServer::f_on_transactions_pool_json), false }
-            },{
-                "f_pool_json",
-                { makeMemberMethod(&RpcServer::f_on_pool_json), false }
-            },{
-                "f_mempool_json",
-                { makeMemberMethod(&RpcServer::f_on_mempool_json), false }
-            },{
-                "k_transactions_by_payment_id",
-                { makeMemberMethod(&RpcServer::k_on_transactions_by_payment_id), false }
-            },{
-                "get_transaction_hashes_by_payment_id",
-                { makeMemberMethod(&RpcServer::onGetTransactionHashesByPaymentId), false }
-            },{
-                "get_transaction_details_by_hashes",
-                { makeMemberMethod(&RpcServer::onGetTransactionsDetailsByHashes), false }
-            },{
-                "get_transaction_details_by_heights",
-                {makeMemberMethod(&RpcServer::onGetTransactionsByHeights), false}
-            },{
-                "k_transaction_details_by_hash",
-                { makeMemberMethod(&RpcServer::onGetTransactionDetailsByHash), false }
-            },{
-                "get_blocks_details_by_heights",
-                { makeMemberMethod(&RpcServer::onGetBlocksDetailsByHeights), false }
-            },{
-                "get_block_details_by_height",
-                { makeMemberMethod(&RpcServer::onGetBlockDetailsByHeight), false }
-            },{
-                "get_blocks_details_by_hashes",
-                { makeMemberMethod(&RpcServer::onGetBlocksDetailsByHashes), false }
-            },{
-                "get_blocks_hashes_by_timestamps",
-                { makeMemberMethod(&RpcServer::onGetBlocksHashesByTimestamps), false }
-            },{
-                "check_tx_key",
-                { makeMemberMethod(&RpcServer::k_on_check_tx_key), false }
-            },{
-                "check_tx_with_view_key",
-                { makeMemberMethod(&RpcServer::k_on_check_tx_with_view_key), false }
-            },{
-                "check_tx_proof",
-                { makeMemberMethod(&RpcServer::k_on_check_tx_proof), false }
-            },{
-                "check_reserve_proof",
-                { makeMemberMethod(&RpcServer::k_on_check_reserve_proof), false }
-            },{
-                "validateaddress",
-                { makeMemberMethod(&RpcServer::on_validate_address), false }
-            },{
-                "verifymessage",
-                { makeMemberMethod(&RpcServer::on_verify_message), false }
-            }
-        };
+        static std::unordered_map<std::string, RpcServer::RpcHandler<JsonMemberMethod>>
+                jsonRpcHandlers = {
+                    { "getblockcount", { makeMemberMethod(&RpcServer::on_getblockcount), true } },
+                    { "on_getblockhash", { makeMemberMethod(&RpcServer::on_getblockhash), false } },
+                    { "getblocktemplate",
+                      { makeMemberMethod(&RpcServer::on_getblocktemplate), false } },
+                    { "getcurrencyid", { makeMemberMethod(&RpcServer::on_get_currency_id), true } },
+                    { "submitblock", { makeMemberMethod(&RpcServer::on_submitblock), false } },
+                    { "resolveopenalias",
+                      { makeMemberMethod(&RpcServer::on_resolve_open_alias), true } },
+                    { "getlastblockheader",
+                      { makeMemberMethod(&RpcServer::on_get_last_block_header), false } },
+                    { "getblockheaderbyhash",
+                      { makeMemberMethod(&RpcServer::on_get_block_header_by_hash), false } },
+                    { "getblockheaderbyheight",
+                      { makeMemberMethod(&RpcServer::on_get_block_header_by_height), false } },
+                    { "f_blocks_list_json",
+                      { makeMemberMethod(&RpcServer::f_on_blocks_list_json), false } },
+                    { "f_block_json", { makeMemberMethod(&RpcServer::f_on_block_json), false } },
+                    { "f_transaction_json",
+                      { makeMemberMethod(&RpcServer::f_on_transaction_json), false } },
+                    { "f_on_transactions_pool_json",
+                      { makeMemberMethod(&RpcServer::f_on_transactions_pool_json), false } },
+                    { "f_pool_json", { makeMemberMethod(&RpcServer::f_on_pool_json), false } },
+                    { "f_mempool_json",
+                      { makeMemberMethod(&RpcServer::f_on_mempool_json), false } },
+                    { "k_transactions_by_payment_id",
+                      { makeMemberMethod(&RpcServer::k_on_transactions_by_payment_id), false } },
+                    { "get_transaction_hashes_by_payment_id",
+                      { makeMemberMethod(&RpcServer::onGetTransactionHashesByPaymentId), false } },
+                    { "get_transaction_details_by_hashes",
+                      { makeMemberMethod(&RpcServer::onGetTransactionsDetailsByHashes), false } },
+                    { "get_transaction_details_by_heights",
+                      { makeMemberMethod(&RpcServer::onGetTransactionsByHeights), false } },
+                    { "k_transaction_details_by_hash",
+                      { makeMemberMethod(&RpcServer::onGetTransactionDetailsByHash), false } },
+                    { "get_blocks_details_by_heights",
+                      { makeMemberMethod(&RpcServer::onGetBlocksDetailsByHeights), false } },
+                    { "get_block_details_by_height",
+                      { makeMemberMethod(&RpcServer::onGetBlockDetailsByHeight), false } },
+                    { "get_blocks_details_by_hashes",
+                      { makeMemberMethod(&RpcServer::onGetBlocksDetailsByHashes), false } },
+                    { "get_blocks_hashes_by_timestamps",
+                      { makeMemberMethod(&RpcServer::onGetBlocksHashesByTimestamps), false } },
+                    { "check_tx_key", { makeMemberMethod(&RpcServer::k_on_check_tx_key), false } },
+                    { "check_tx_with_view_key",
+                      { makeMemberMethod(&RpcServer::k_on_check_tx_with_view_key), false } },
+                    { "check_tx_proof",
+                      { makeMemberMethod(&RpcServer::k_on_check_tx_proof), false } },
+                    { "check_reserve_proof",
+                      { makeMemberMethod(&RpcServer::k_on_check_reserve_proof), false } },
+                    { "validateaddress",
+                      { makeMemberMethod(&RpcServer::on_validate_address), false } },
+                    { "verifymessage", { makeMemberMethod(&RpcServer::on_verify_message), false } }
+                };
 
         auto it = jsonRpcHandlers.find(jsonRequest.getMethod());
         if (it == jsonRpcHandlers.end()) {
@@ -470,17 +366,21 @@ bool RpcServer::enableCors(const std::string domain)
     return true;
 }
 
-std::string RpcServer::getCorsDomain() {
+std::string RpcServer::getCorsDomain()
+{
     return m_cors_domain;
 }
 
-bool RpcServer::setFeeAddress(
-    const std::string &fee_address,
-    const AccountPublicAddress &fee_acc)
+bool RpcServer::setFeeAddress(const std::string &fee_address, const AccountPublicAddress &fee_acc)
 {
     m_fee_address = fee_address;
     m_fee_acc = fee_acc;
 
+    return true;
+}
+
+bool RpcServer::setFeeAmount(const uint64_t fee_amount) {
+    m_fee_amount = fee_amount;
     return true;
 }
 
@@ -528,9 +428,7 @@ bool RpcServer::masternode_check_incoming_tx(const BinaryArray &tx_blob)
 
     const uint64_t fee = inputs_amount - outputs_amount;
     bool isFusionTransaction = m_core.currency().isFusionTransaction(
-        tx,
-        tx_blob.size(),
-        m_core.get_current_blockchain_height() - 1);
+            tx, tx_blob.size(), m_core.get_current_blockchain_height() - 1);
     if (fee == 0 && isFusionTransaction) {
         logger(DEBUGGING) << "Masternode received fusion transaction, relaying with no fee check";
         return true;
@@ -547,18 +445,16 @@ bool RpcServer::masternode_check_incoming_tx(const BinaryArray &tx_blob)
     }
 
     if (amount != 0) {
-        logger(INFO)
-            << "Masternode received relayed transaction fee: "
-            << m_core.currency().formatAmount(amount) << " QWC";
+        logger(INFO) << "Masternode received relayed transaction fee: "
+                     << m_core.currency().formatAmount(amount) << " QWC";
         return true;
     }
 
     return false;
 }
 
-bool RpcServer::on_get_blocks(
-    const COMMAND_RPC_GET_BLOCKS_FAST::request &req,
-    COMMAND_RPC_GET_BLOCKS_FAST::response &res)
+bool RpcServer::on_get_blocks(const COMMAND_RPC_GET_BLOCKS_FAST::request &req,
+                              COMMAND_RPC_GET_BLOCKS_FAST::response &res)
 {
     // TODO: code duplication see InProcessNode::doGetNewBlocks()
     if (req.block_ids.empty()) {
@@ -574,10 +470,7 @@ bool RpcServer::on_get_blocks(
     uint32_t totalBlockCount;
     uint32_t startBlockIndex;
     std::vector<Crypto::Hash> supplement = m_core.findBlockchainSupplement(
-        req.block_ids,
-        COMMAND_RPC_GET_BLOCKS_FAST_MAX_COUNT,
-        totalBlockCount,
-        startBlockIndex);
+            req.block_ids, COMMAND_RPC_GET_BLOCKS_FAST_MAX_COUNT, totalBlockCount, startBlockIndex);
 
     res.current_height = totalBlockCount;
     res.start_height = startBlockIndex;
@@ -593,8 +486,7 @@ bool RpcServer::on_get_blocks(
         res.blocks.back().txs.reserve(completeBlock->getTransactionCount());
         for (size_t i = 0; i < completeBlock->getTransactionCount(); ++i) {
             res.blocks.back().txs.push_back(
-                asString(toBinaryArray(completeBlock->getTransaction(i)))
-            );
+                    asString(toBinaryArray(completeBlock->getTransaction(i))));
         }
     }
 
@@ -603,19 +495,14 @@ bool RpcServer::on_get_blocks(
     return true;
 }
 
-bool RpcServer::on_query_blocks(
-    const COMMAND_RPC_QUERY_BLOCKS::request &req,
-    COMMAND_RPC_QUERY_BLOCKS::response &res)
+bool RpcServer::on_query_blocks(const COMMAND_RPC_QUERY_BLOCKS::request &req,
+                                COMMAND_RPC_QUERY_BLOCKS::response &res)
 {
     uint32_t startHeight;
     uint32_t currentHeight;
     uint32_t fullOffset;
 
-    if (!m_core.queryBlocks(req.block_ids,
-                            req.timestamp,
-                            startHeight,
-                            currentHeight,
-                            fullOffset,
+    if (!m_core.queryBlocks(req.block_ids, req.timestamp, startHeight, currentHeight, fullOffset,
                             res.items)) {
         res.status = "Failed to perform query";
         return false;
@@ -630,18 +517,13 @@ bool RpcServer::on_query_blocks(
     return true;
 }
 
-bool RpcServer::on_query_blocks_lite(
-    const COMMAND_RPC_QUERY_BLOCKS_LITE::request &req,
-    COMMAND_RPC_QUERY_BLOCKS_LITE::response &res)
+bool RpcServer::on_query_blocks_lite(const COMMAND_RPC_QUERY_BLOCKS_LITE::request &req,
+                                     COMMAND_RPC_QUERY_BLOCKS_LITE::response &res)
 {
     uint32_t startHeight;
     uint32_t currentHeight;
     uint32_t fullOffset;
-    if (!m_core.queryBlocksLite(req.blockIds,
-                                req.timestamp,
-                                startHeight,
-                                currentHeight,
-                                fullOffset,
+    if (!m_core.queryBlocksLite(req.blockIds, req.timestamp, startHeight, currentHeight, fullOffset,
                                 res.items)) {
         res.status = "Failed to perform query";
         return false;
@@ -656,20 +538,15 @@ bool RpcServer::on_query_blocks_lite(
     return true;
 }
 
-bool RpcServer::on_query_blocks_detailed(
-    const COMMAND_RPC_QUERY_BLOCKS_DETAILED::request &req,
-    COMMAND_RPC_QUERY_BLOCKS_DETAILED::response &res)
+bool RpcServer::on_query_blocks_detailed(const COMMAND_RPC_QUERY_BLOCKS_DETAILED::request &req,
+                                         COMMAND_RPC_QUERY_BLOCKS_DETAILED::response &res)
 {
     uint32_t startIndex;
     uint32_t currentIndex;
     uint32_t fullOffset;
 
-    if (!m_core.queryBlocksDetailed(req.blockIds,
-                                    req.timestamp,
-                                    startIndex,
-                                    currentIndex,
-                                    fullOffset,
-                                    res.blocks)) {
+    if (!m_core.queryBlocksDetailed(req.blockIds, req.timestamp, startIndex, currentIndex,
+                                    fullOffset, res.blocks)) {
         res.status = "Failed to perform query";
         return false;
     }
@@ -683,9 +560,8 @@ bool RpcServer::on_query_blocks_detailed(
     return true;
 }
 
-bool RpcServer::on_get_indexes(
-    const COMMAND_RPC_GET_TX_GLOBAL_OUTPUTS_INDEXES::request &req,
-    COMMAND_RPC_GET_TX_GLOBAL_OUTPUTS_INDEXES::response &res)
+bool RpcServer::on_get_indexes(const COMMAND_RPC_GET_TX_GLOBAL_OUTPUTS_INDEXES::request &req,
+                               COMMAND_RPC_GET_TX_GLOBAL_OUTPUTS_INDEXES::response &res)
 {
     std::vector<uint32_t> outputIndexes;
     if (!m_core.get_tx_outputs_gindexs(req.txid, outputIndexes)) {
@@ -701,9 +577,8 @@ bool RpcServer::on_get_indexes(
     return true;
 }
 
-bool RpcServer::on_get_random_outs(
-    const COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::request &req,
-    COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::response &res)
+bool RpcServer::on_get_random_outs(const COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::request &req,
+                                   COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::response &res)
 {
     res.status = "Failed";
     if (!m_core.get_random_outs_for_amounts(req, res)) {
@@ -716,14 +591,13 @@ bool RpcServer::on_get_random_outs(
     typedef COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::outs_for_amount outs_for_amount;
     typedef COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::out_entry out_entry;
 
-    std::for_each(res.outs.begin(), res.outs.end(), [&](outs_for_amount &ofa)  {
+    std::for_each(res.outs.begin(), res.outs.end(), [&](outs_for_amount &ofa) {
         ss << "[" << ofa.amount << "]:";
 
         assert(ofa.outs.size() && "internal error: ofa.outs.size() is empty");
 
-        std::for_each(ofa.outs.begin(), ofa.outs.end(), [&](out_entry &oe) {
-            ss << oe.global_amount_index << " ";
-        });
+        std::for_each(ofa.outs.begin(), ofa.outs.end(),
+                      [&](out_entry &oe) { ss << oe.global_amount_index << " "; });
 
         ss << ENDL;
     });
@@ -735,13 +609,13 @@ bool RpcServer::on_get_random_outs(
     return true;
 }
 
-bool RpcServer::onGetPoolChanges(
-    const COMMAND_RPC_GET_POOL_CHANGES::request &req,
-    COMMAND_RPC_GET_POOL_CHANGES::response &rsp)
+bool RpcServer::onGetPoolChanges(const COMMAND_RPC_GET_POOL_CHANGES::request &req,
+                                 COMMAND_RPC_GET_POOL_CHANGES::response &rsp)
 {
     rsp.status = CORE_RPC_STATUS_OK;
     std::vector<CryptoNote::Transaction> addedTransactions;
-    rsp.isTailBlockActual = m_core.getPoolChanges(req.tailBlockId, req.knownTxsIds, addedTransactions, rsp.deletedTxsIds);
+    rsp.isTailBlockActual = m_core.getPoolChanges(req.tailBlockId, req.knownTxsIds,
+                                                  addedTransactions, rsp.deletedTxsIds);
     for (auto &tx : addedTransactions) {
         BinaryArray txBlob;
         if (!toBinaryArray(tx, txBlob)) {
@@ -754,49 +628,42 @@ bool RpcServer::onGetPoolChanges(
     return true;
 }
 
-bool RpcServer::onGetPoolChangesLite(
-    const COMMAND_RPC_GET_POOL_CHANGES_LITE::request &req,
-    COMMAND_RPC_GET_POOL_CHANGES_LITE::response &rsp)
+bool RpcServer::onGetPoolChangesLite(const COMMAND_RPC_GET_POOL_CHANGES_LITE::request &req,
+                                     COMMAND_RPC_GET_POOL_CHANGES_LITE::response &rsp)
 {
     rsp.status = CORE_RPC_STATUS_OK;
-    rsp.isTailBlockActual = m_core.getPoolChangesLite(req.tailBlockId,
-                                                      req.knownTxsIds,
-                                                      rsp.addedTxs,
-                                                      rsp.deletedTxsIds);
+    rsp.isTailBlockActual = m_core.getPoolChangesLite(req.tailBlockId, req.knownTxsIds,
+                                                      rsp.addedTxs, rsp.deletedTxsIds);
 
     return true;
 }
 
 bool RpcServer::onGetBlocksDetailsByHeights(
-    const COMMAND_RPC_GET_BLOCKS_DETAILS_BY_HEIGHTS::request &req,
-    COMMAND_RPC_GET_BLOCKS_DETAILS_BY_HEIGHTS::response &rsp)
+        const COMMAND_RPC_GET_BLOCKS_DETAILS_BY_HEIGHTS::request &req,
+        COMMAND_RPC_GET_BLOCKS_DETAILS_BY_HEIGHTS::response &rsp)
 {
     try {
         std::vector<BlockDetails2> blockDetails;
         for (const uint32_t &height : req.blockHeights) {
             if (m_core.get_current_blockchain_height() <= height) {
-                throw JsonRpc::JsonRpcError{
+                throw JsonRpc::JsonRpcError {
                     CORE_RPC_ERROR_CODE_TOO_BIG_HEIGHT,
-                    std::string("To big height: ")
-                        + std::to_string(height)
-                        + ", current blockchain height = "
-                        + std::to_string(m_core.get_current_blockchain_height() - 1)
+                    std::string("To big height: ") + std::to_string(height)
+                            + ", current blockchain height = "
+                            + std::to_string(m_core.get_current_blockchain_height() - 1)
                 };
             }
             Hash block_hash = m_core.getBlockIdByHeight(height);
             Block blk;
             if (!m_core.getBlockByHash(block_hash, blk)) {
-                throw JsonRpc::JsonRpcError{
-                    CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
-                    "Internal error: can't get block by height " + std::to_string(height) + '.'
-                };
+                throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
+                                              "Internal error: can't get block by height "
+                                                      + std::to_string(height) + '.' };
             }
             BlockDetails2 detail;
             if (!m_core.fillBlockDetails(blk, detail)) {
-                throw JsonRpc::JsonRpcError{
-                    CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
-                    "Internal error: can't fill block details."
-                };
+                throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
+                                              "Internal error: can't fill block details." };
             }
             blockDetails.push_back(detail);
         }
@@ -815,25 +682,23 @@ bool RpcServer::onGetBlocksDetailsByHeights(
 }
 
 bool RpcServer::onGetBlocksDetailsByHashes(
-    const COMMAND_RPC_GET_BLOCKS_DETAILS_BY_HASHES::request &req,
-    COMMAND_RPC_GET_BLOCKS_DETAILS_BY_HASHES::response &rsp)
+        const COMMAND_RPC_GET_BLOCKS_DETAILS_BY_HASHES::request &req,
+        COMMAND_RPC_GET_BLOCKS_DETAILS_BY_HASHES::response &rsp)
 {
     try {
         std::vector<BlockDetails2> blockDetails;
         for (const Crypto::Hash &hash : req.blockHashes) {
             Block blk;
             if (!m_core.getBlockByHash(hash, blk)) {
-                //throw JsonRpc::JsonRpcError{
+                // throw JsonRpc::JsonRpcError{
                 //    CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
                 //    "Internal error: can't get block by hash " + Common::PodToHex(hash) + '.'
                 //};
             }
             BlockDetails2 detail;
             if (!m_core.fillBlockDetails(blk, detail)) {
-                throw JsonRpc::JsonRpcError{
-                    CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
-                    "Internal error: can't fill block details."
-                };
+                throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
+                                              "Internal error: can't fill block details." };
             }
             blockDetails.push_back(detail);
         }
@@ -852,32 +717,29 @@ bool RpcServer::onGetBlocksDetailsByHashes(
 }
 
 bool RpcServer::onGetBlockDetailsByHeight(
-    const COMMAND_RPC_GET_BLOCK_DETAILS_BY_HEIGHT::request &req,
-    COMMAND_RPC_GET_BLOCK_DETAILS_BY_HEIGHT::response &rsp)
+        const COMMAND_RPC_GET_BLOCK_DETAILS_BY_HEIGHT::request &req,
+        COMMAND_RPC_GET_BLOCK_DETAILS_BY_HEIGHT::response &rsp)
 {
     try {
         BlockDetails2 blockDetails;
         if (m_core.get_current_blockchain_height() <= req.blockHeight) {
-            throw JsonRpc::JsonRpcError{
+            throw JsonRpc::JsonRpcError {
                 CORE_RPC_ERROR_CODE_TOO_BIG_HEIGHT,
-                std::string("To big height: ")
-                    + std::to_string(req.blockHeight)
-                    + ", current blockchain height = "
-                    + std::to_string(m_core.get_current_blockchain_height() - 1) };
+                std::string("To big height: ") + std::to_string(req.blockHeight)
+                        + ", current blockchain height = "
+                        + std::to_string(m_core.get_current_blockchain_height() - 1)
+            };
         }
         Hash block_hash = m_core.getBlockIdByHeight(req.blockHeight);
         Block blk;
         if (!m_core.getBlockByHash(block_hash, blk)) {
-            throw JsonRpc::JsonRpcError{
-                CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
-                "Internal error: can't get block by height " + std::to_string(req.blockHeight) + '.'
-            };
+            throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
+                                          "Internal error: can't get block by height "
+                                                  + std::to_string(req.blockHeight) + '.' };
         }
         if (!m_core.fillBlockDetails(blk, blockDetails)) {
-            throw JsonRpc::JsonRpcError{
-                CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
-                "Internal error: can't fill block details."
-            };
+            throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
+                                          "Internal error: can't fill block details." };
         }
         rsp.block = blockDetails;
     } catch (std::system_error &e) {
@@ -894,25 +756,18 @@ bool RpcServer::onGetBlockDetailsByHeight(
 }
 
 bool RpcServer::onGetBlocksHashesByTimestamps(
-    const COMMAND_RPC_GET_BLOCKS_HASHES_BY_TIMESTAMPS::request &req,
-    COMMAND_RPC_GET_BLOCKS_HASHES_BY_TIMESTAMPS::response &rsp)
+        const COMMAND_RPC_GET_BLOCKS_HASHES_BY_TIMESTAMPS::request &req,
+        COMMAND_RPC_GET_BLOCKS_HASHES_BY_TIMESTAMPS::response &rsp)
 {
     try {
         uint32_t count;
         std::vector<Crypto::Hash> blockHashes;
-        if (!m_core.getBlockchainStorage().getBlockIdsByTimestamp(req.timestampBegin,
-                                                                    req.timestampEnd,
-                                                                    req.limit,
-                                                                    blockHashes,
-                                                                    count)) {
-            throw JsonRpc::JsonRpcError{
-                CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
-                "Internal error: can't get blocks within timestamps "
-                    + std::to_string(req.timestampBegin)
-                    + " - "
-                    + std::to_string(req.timestampEnd)
-                    + "."
-            };
+        if (!m_core.get_blockchain_storage().getBlockIdsByTimestamp(
+                    req.timestampBegin, req.timestampEnd, req.limit, blockHashes, count)) {
+            throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
+                                          "Internal error: can't get blocks within timestamps "
+                                                  + std::to_string(req.timestampBegin) + " - "
+                                                  + std::to_string(req.timestampEnd) + "." };
         }
         rsp.blockHashes = std::move(blockHashes);
         rsp.count = count;
@@ -930,8 +785,8 @@ bool RpcServer::onGetBlocksHashesByTimestamps(
 }
 
 bool RpcServer::onGetTransactionsDetailsByHashes(
-    const COMMAND_RPC_GET_TRANSACTIONS_DETAILS_BY_HASHES::request &req,
-    COMMAND_RPC_GET_TRANSACTIONS_DETAILS_BY_HASHES::response &rsp)
+        const COMMAND_RPC_GET_TRANSACTIONS_DETAILS_BY_HASHES::request &req,
+        COMMAND_RPC_GET_TRANSACTIONS_DETAILS_BY_HASHES::response &rsp)
 {
     try {
         std::vector<TransactionDetails2> transactionsDetails;
@@ -942,10 +797,10 @@ bool RpcServer::onGetTransactionsDetailsByHashes(
         m_core.getTransactions(req.transactionHashes, txs, missed_txs, true);
 
         if (!txs.empty()) {
-            for (const Transaction &tx: txs) {
+            for (const Transaction &tx : txs) {
                 TransactionDetails2 txDetails;
                 if (!m_core.fillTransactionDetails(tx, txDetails)) {
-                    throw JsonRpc::JsonRpcError{
+                    throw JsonRpc::JsonRpcError {
                         CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
                         "Internal error: can't fill transaction details."
                     };
@@ -977,8 +832,8 @@ bool RpcServer::onGetTransactionsDetailsByHashes(
 }
 
 bool RpcServer::onGetTransactionDetailsByHash(
-    const COMMAND_RPC_GET_TRANSACTION_DETAILS_BY_HASH::request &req,
-    COMMAND_RPC_GET_TRANSACTION_DETAILS_BY_HASH::response &rsp)
+        const COMMAND_RPC_GET_TRANSACTION_DETAILS_BY_HASH::request &req,
+        COMMAND_RPC_GET_TRANSACTION_DETAILS_BY_HASH::response &rsp)
 {
     std::list<Crypto::Hash> missed_txs;
     std::list<Transaction> txs;
@@ -988,18 +843,14 @@ bool RpcServer::onGetTransactionDetailsByHash(
 
     if (txs.empty() || !missed_txs.empty()) {
         std::string hash_str = Common::podToHex(missed_txs.back());
-        throw JsonRpc::JsonRpcError{
-            CORE_RPC_ERROR_CODE_WRONG_PARAM,
-            "transaction wasn't found. Hash = " + hash_str + '.'
-        };
+        throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_WRONG_PARAM,
+                                      "transaction wasn't found. Hash = " + hash_str + '.' };
     }
 
     TransactionDetails2 transactionsDetails;
     if (!m_core.fillTransactionDetails(txs.back(), transactionsDetails)) {
-        throw JsonRpc::JsonRpcError{
-            CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
-            "Internal error: can't fill transaction details."
-        };
+        throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
+                                      "Internal error: can't fill transaction details." };
     }
 
     rsp.transaction = std::move(transactionsDetails);
@@ -1010,14 +861,14 @@ bool RpcServer::onGetTransactionDetailsByHash(
 }
 
 bool RpcServer::onGetTransactionHashesByPaymentId(
-    const COMMAND_RPC_GET_TRANSACTION_HASHES_BY_PAYMENT_ID::request &req,
-    COMMAND_RPC_GET_TRANSACTION_HASHES_BY_PAYMENT_ID::response &rsp)
+        const COMMAND_RPC_GET_TRANSACTION_HASHES_BY_PAYMENT_ID::request &req,
+        COMMAND_RPC_GET_TRANSACTION_HASHES_BY_PAYMENT_ID::response &rsp)
 {
     try {
         rsp.transactionHashes = m_core.getTransactionHashesByPaymentId(req.paymentId);
     } catch (std::system_error &e) {
         rsp.status = e.what();
-    return false;
+        return false;
     } catch (std::exception &e) {
         rsp.status = "Error: " + std::string(e.what());
         return false;
@@ -1028,13 +879,12 @@ bool RpcServer::onGetTransactionHashesByPaymentId(
     return true;
 }
 
-bool RpcServer::on_get_info(
-    const COMMAND_RPC_GET_INFO::request &req,
-    COMMAND_RPC_GET_INFO::response &res)
+bool RpcServer::on_get_info(const COMMAND_RPC_GET_INFO::request &req,
+                            COMMAND_RPC_GET_INFO::response &res)
 {
     res.height = m_core.get_current_blockchain_height();
-    res.last_known_block_index = std::max(static_cast<uint32_t>(1),
-                                          m_protocolQuery.getObservedHeight()) - 1;
+    res.last_known_block_index =
+            std::max(static_cast<uint32_t>(1), m_protocolQuery.getObservedHeight()) - 1;
     if (res.height == res.last_known_block_index) {
         // node is synced
         res.difficulty = m_core.getNextBlockDifficulty(time(nullptr));
@@ -1051,9 +901,8 @@ bool RpcServer::on_get_info(
     res.rpc_connections_count = get_connections_count();
     res.white_peerlist_size = m_p2p.getPeerlistManager().get_white_peers_count();
     res.grey_peerlist_size = m_p2p.getPeerlistManager().get_gray_peers_count();
-    Crypto::Hash last_block_hash = m_core.getBlockIdByHeight(
-        m_core.get_current_blockchain_height() - 1
-    );
+    Crypto::Hash last_block_hash =
+            m_core.getBlockIdByHeight(m_core.get_current_blockchain_height() - 1);
     res.top_block_hash = Common::podToHex(last_block_hash);
     res.version = PROJECT_VERSION_LONG;
     res.fee_address = m_fee_address.empty() ? std::string() : m_fee_address;
@@ -1067,14 +916,12 @@ bool RpcServer::on_get_info(
 
     Block blk;
     if (!m_core.getBlockByHash(last_block_hash, blk)) {
-        throw JsonRpc::JsonRpcError{
-            CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
-            "Internal error: can't get last block by hash."
-        };
+        throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
+                                      "Internal error: can't get last block by hash." };
     }
 
     if (blk.baseTransaction.inputs.front().type() != typeid(BaseInput)) {
-        throw JsonRpc::JsonRpcError{
+        throw JsonRpc::JsonRpcError {
             CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
             "Internal error: coinbase transaction in the block has the wrong type"
         };
@@ -1098,9 +945,8 @@ bool RpcServer::on_get_info(
     return true;
 }
 
-bool RpcServer::on_get_height(
-    const COMMAND_RPC_GET_HEIGHT::request &req,
-    COMMAND_RPC_GET_HEIGHT::response &res)
+bool RpcServer::on_get_height(const COMMAND_RPC_GET_HEIGHT::request &req,
+                              COMMAND_RPC_GET_HEIGHT::response &res)
 {
     res.height = m_core.get_current_blockchain_height();
     res.status = CORE_RPC_STATUS_OK;
@@ -1108,9 +954,8 @@ bool RpcServer::on_get_height(
     return true;
 }
 
-bool RpcServer::on_get_transactions(
-    const COMMAND_RPC_GET_TRANSACTIONS::request &req,
-    COMMAND_RPC_GET_TRANSACTIONS::response &res)
+bool RpcServer::on_get_transactions(const COMMAND_RPC_GET_TRANSACTIONS::request &req,
+                                    COMMAND_RPC_GET_TRANSACTIONS::response &res)
 {
     std::vector<Hash> vh;
     for (const auto &tx_hex_str : req.txs_hashes) {
@@ -1148,24 +993,23 @@ bool RpcServer::onGetTransactionsByHeights(
     try {
         std::vector<Crypto::Hash> vh;
 
-        uint32_t upperBorder = std::min(req.startBlock + req.additor,
-                                        m_core.get_current_blockchain_height());
+        uint32_t upperBorder =
+                std::min(req.startBlock + req.additor, m_core.get_current_blockchain_height());
         for (size_t i = req.startBlock; i <= upperBorder; i++) {
             Block blk;
             uint32_t h = static_cast<uint32_t>(i);
             Crypto::Hash blockHash = m_core.getBlockIdByHeight(i);
 
             if (!m_core.getBlockByHash(blockHash, blk)) {
-                throw JsonRpc::JsonRpcError{
-                        CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
-                        "Internal error: can't get block by hash. Hash = " + podToHex(blockHash) + '.'
-                };
+                throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
+                                              "Internal error: can't get block by hash. Hash = "
+                                                      + podToHex(blockHash) + '.' };
             }
 
             if (blk.baseTransaction.inputs.front().type() != typeid(BaseInput)) {
-                throw JsonRpc::JsonRpcError{
-                        CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
-                        "Internal error: coinbase transaction in the block has the wrong type"
+                throw JsonRpc::JsonRpcError {
+                    CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
+                    "Internal error: coinbase transaction in the block has the wrong type"
                 };
             }
 
@@ -1186,7 +1030,7 @@ bool RpcServer::onGetTransactionsByHeights(
             for (const Transaction &tx : txs) {
                 TransactionDetails2 txDetails;
                 if (!m_core.fillTransactionDetails(tx, txDetails)) {
-                    throw JsonRpc::JsonRpcError{
+                    throw JsonRpc::JsonRpcError {
                         CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
                         "Internal error:  can't fill transaction Details."
                     };
@@ -1220,9 +1064,8 @@ bool RpcServer::onGetTransactionsByHeights(
     return true;
 }
 
-bool RpcServer::on_send_raw_tx(
-    const COMMAND_RPC_SEND_RAW_TX::request &req,
-    COMMAND_RPC_SEND_RAW_TX::response &res)
+bool RpcServer::on_send_raw_tx(const COMMAND_RPC_SEND_RAW_TX::request &req,
+                               COMMAND_RPC_SEND_RAW_TX::response &res)
 {
     BinaryArray tx_blob;
     if (!fromHex(req.tx_as_hex, tx_blob)) {
@@ -1273,9 +1116,8 @@ bool RpcServer::on_send_raw_tx(
     return true;
 }
 
-bool RpcServer::on_start_mining(
-    const COMMAND_RPC_START_MINING::request &req,
-    COMMAND_RPC_START_MINING::response &res)
+bool RpcServer::on_start_mining(const COMMAND_RPC_START_MINING::request &req,
+                                COMMAND_RPC_START_MINING::response &res)
 {
     if (m_restricted_rpc) {
         res.status = "Failed, restricted handle";
@@ -1298,9 +1140,8 @@ bool RpcServer::on_start_mining(
     return true;
 }
 
-bool RpcServer::on_stop_mining(
-    const COMMAND_RPC_STOP_MINING::request &req,
-    COMMAND_RPC_STOP_MINING::response &res)
+bool RpcServer::on_stop_mining(const COMMAND_RPC_STOP_MINING::request &req,
+                               COMMAND_RPC_STOP_MINING::response &res)
 {
     if (m_restricted_rpc) {
         res.status = "Failed, restricted handle";
@@ -1317,9 +1158,8 @@ bool RpcServer::on_stop_mining(
     return true;
 }
 
-bool RpcServer::on_stop_daemon(
-    const COMMAND_RPC_STOP_DAEMON::request &req,
-    COMMAND_RPC_STOP_DAEMON::response &res)
+bool RpcServer::on_stop_daemon(const COMMAND_RPC_STOP_DAEMON::request &req,
+                               COMMAND_RPC_STOP_DAEMON::response &res)
 {
     if (m_restricted_rpc) {
         res.status = "Failed, restricted handle";
@@ -1335,9 +1175,8 @@ bool RpcServer::on_stop_daemon(
     return true;
 }
 
-bool RpcServer::on_get_fee_address(
-    const COMMAND_RPC_GET_FEE_ADDRESS::request &req,
-    COMMAND_RPC_GET_FEE_ADDRESS::response &res)
+bool RpcServer::on_get_fee_address(const COMMAND_RPC_GET_FEE_ADDRESS::request &req,
+                                   COMMAND_RPC_GET_FEE_ADDRESS::response &res)
 {
     if (m_fee_address.empty()) {
         res.status = CORE_RPC_STATUS_OK;
@@ -1350,9 +1189,8 @@ bool RpcServer::on_get_fee_address(
     return true;
 }
 
-bool RpcServer::on_get_peer_list(
-    const COMMAND_RPC_GET_PEER_LIST::request &req,
-    COMMAND_RPC_GET_PEER_LIST::response &res)
+bool RpcServer::on_get_peer_list(const COMMAND_RPC_GET_PEER_LIST::request &req,
+                                 COMMAND_RPC_GET_PEER_LIST::response &res)
 {
     std::list<PeerlistEntry> pl_wite;
     std::list<PeerlistEntry> pl_gray;
@@ -1368,18 +1206,15 @@ bool RpcServer::on_get_peer_list(
     return true;
 }
 
-bool RpcServer::on_get_payment_id(
-    const COMMAND_RPC_GEN_PAYMENT_ID::request &req,
-    COMMAND_RPC_GEN_PAYMENT_ID::response &res)
+bool RpcServer::on_get_payment_id(const COMMAND_RPC_GEN_PAYMENT_ID::request &req,
+                                  COMMAND_RPC_GEN_PAYMENT_ID::response &res)
 {
     std::string pid;
     try {
         pid = Common::podToHex(Crypto::rand<Crypto::Hash>());
     } catch (const std::exception &e) {
-        throw JsonRpc::JsonRpcError{
-            CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
-            "Internal error: can't generate Payment ID"
-        };
+        throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
+                                      "Internal error: can't generate Payment ID" };
     }
 
     res.payment_id = pid;
@@ -1387,23 +1222,20 @@ bool RpcServer::on_get_payment_id(
     return true;
 }
 
-bool RpcServer::f_on_blocks_list_json(
-    const F_COMMAND_RPC_GET_BLOCKS_LIST::request &req,
-    F_COMMAND_RPC_GET_BLOCKS_LIST::response &res)
+bool RpcServer::f_on_blocks_list_json(const F_COMMAND_RPC_GET_BLOCKS_LIST::request &req,
+                                      F_COMMAND_RPC_GET_BLOCKS_LIST::response &res)
 {
     if (m_core.get_current_blockchain_height() <= req.height) {
-        throw JsonRpc::JsonRpcError{
-            CORE_RPC_ERROR_CODE_TOO_BIG_HEIGHT,
-            std::string("To big height: ")
-                + std::to_string(req.height)
-                + ", current blockchain height = "
-                + std::to_string(m_core.get_current_blockchain_height())
-        };
+        throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_TOO_BIG_HEIGHT,
+                                      std::string("To big height: ") + std::to_string(req.height)
+                                              + ", current blockchain height = "
+                                              + std::to_string(
+                                                      m_core.get_current_blockchain_height()) };
     }
 
     uint32_t print_blocks_count = 20;
     uint32_t last_height = req.height - print_blocks_count;
-    if (req.height <= print_blocks_count)  {
+    if (req.height <= print_blocks_count) {
         last_height = 0;
     }
 
@@ -1411,10 +1243,9 @@ bool RpcServer::f_on_blocks_list_json(
         Hash block_hash = m_core.getBlockIdByHeight(static_cast<uint32_t>(i));
         Block blk;
         if (!m_core.getBlockByHash(block_hash, blk)) {
-            throw JsonRpc::JsonRpcError{
-                CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
-                "Internal error: can't get block by height. Height = " + std::to_string(i) + '.'
-            };
+            throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
+                                          "Internal error: can't get block by height. Height = "
+                                                  + std::to_string(i) + '.' };
         }
 
         size_t tx_cumulative_block_size;
@@ -1453,9 +1284,8 @@ bool RpcServer::f_on_blocks_list_json(
     return true;
 }
 
-bool RpcServer::f_on_block_json(
-    const F_COMMAND_RPC_GET_BLOCK_DETAILS::request &req,
-    F_COMMAND_RPC_GET_BLOCK_DETAILS::response &res)
+bool RpcServer::f_on_block_json(const F_COMMAND_RPC_GET_BLOCK_DETAILS::request &req,
+                                F_COMMAND_RPC_GET_BLOCK_DETAILS::response &res)
 {
     Hash hash;
 
@@ -1464,23 +1294,21 @@ bool RpcServer::f_on_block_json(
         hash = m_core.getBlockIdByHeight(height);
     } catch (boost::bad_lexical_cast &) {
         if (!parse_hash256(req.hash, hash)) {
-            throw JsonRpc::JsonRpcError{
-                CORE_RPC_ERROR_CODE_WRONG_PARAM,
-                "Failed to parse hex representation of block hash. Hex = " + req.hash + '.'
-            };
+            throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_WRONG_PARAM,
+                                          "Failed to parse hex representation of block hash. Hex = "
+                                                  + req.hash + '.' };
         }
     }
 
     Block blk;
     if (!m_core.getBlockByHash(hash, blk)) {
-        throw JsonRpc::JsonRpcError{
-            CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
-            "Internal error: can't get block by hash. Hash = " + req.hash + '.'
-        };
+        throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
+                                      "Internal error: can't get block by hash. Hash = " + req.hash
+                                              + '.' };
     }
 
     if (blk.baseTransaction.inputs.front().type() != typeid(BaseInput)) {
-        throw JsonRpc::JsonRpcError{
+        throw JsonRpc::JsonRpcError {
             CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
             "Internal error: coinbase transaction in the block has the wrong type"
         };
@@ -1508,8 +1336,7 @@ bool RpcServer::f_on_block_json(
     res.block.reward = block_header.reward;
 
     std::vector<size_t> blocksSizes;
-    if (!m_core.getBackwardBlocksSizes(res.block.height,
-                                       blocksSizes,
+    if (!m_core.getBackwardBlocksSizes(res.block.height, blocksSizes,
                                        parameters::CRYPTONOTE_REWARD_BLOCKS_WINDOW)) {
         return false;
     }
@@ -1546,7 +1373,7 @@ bool RpcServer::f_on_block_json(
         }
     }
 
-    if (res.block.height >= CryptoNote::parameters::UPGRADE_HEIGHT_V6) {
+    if (res.block.height >= CryptoNote::parameters::UPGRADE_HEIGHT_REWARD_SCHEME) {
         m_core.getBlockHeight(blk.previousBlockHash, previousBlockHeight);
         blockTarget = blk.timestamp - m_core.getBlockTimestamp(previousBlockHeight);
     }
@@ -1554,29 +1381,18 @@ bool RpcServer::f_on_block_json(
     uint64_t maxReward = 0;
     uint64_t currentReward = 0;
     int64_t emissionChange = 0;
-    size_t blockGrantedFullRewardZone =  CryptoNote::parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V2;
+    size_t blockGrantedFullRewardZone =
+            CryptoNote::parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V2;
     res.block.effectiveSizeMedian = std::max(res.block.sizeMedian, blockGrantedFullRewardZone);
 
-    if (!m_core.getBlockReward(res.block.major_version,
-                               res.block.sizeMedian,
-                               0,
-                               prevBlockGeneratedCoins,
-                               0,
-                               maxReward,
-                               emissionChange,
-                               res.block.height,
-                               blockTarget)) {
+    if (!m_core.getBlockReward(res.block.major_version, res.block.sizeMedian, 0,
+                               prevBlockGeneratedCoins, 0, maxReward, emissionChange,
+                               res.block.height, blockTarget)) {
         return false;
     }
-    if (!m_core.getBlockReward(res.block.major_version,
-                               res.block.sizeMedian,
-                               res.block.transactionsCumulativeSize,
-                               prevBlockGeneratedCoins,
-                               0,
-                               currentReward,
-                               emissionChange,
-                               res.block.height,
-                               blockTarget)) {
+    if (!m_core.getBlockReward(res.block.major_version, res.block.sizeMedian,
+                               res.block.transactionsCumulativeSize, prevBlockGeneratedCoins, 0,
+                               currentReward, emissionChange, res.block.height, blockTarget)) {
         return false;
     }
 
@@ -1585,10 +1401,10 @@ bool RpcServer::f_on_block_json(
         res.block.penalty = static_cast<double>(0);
     } else {
         if (maxReward < currentReward) {
-          return false;
+            return false;
         }
         res.block.penalty =
-            static_cast<double>(maxReward - currentReward) / static_cast<double>(maxReward);
+                static_cast<double>(maxReward - currentReward) / static_cast<double>(maxReward);
     }
 
     // Base transaction adding
@@ -1625,14 +1441,13 @@ bool RpcServer::f_on_block_json(
     return true;
 }
 
-bool RpcServer::f_on_transaction_json(
-    const F_COMMAND_RPC_GET_TRANSACTION_DETAILS::request &req,
-    F_COMMAND_RPC_GET_TRANSACTION_DETAILS::response &res)
+bool RpcServer::f_on_transaction_json(const F_COMMAND_RPC_GET_TRANSACTION_DETAILS::request &req,
+                                      F_COMMAND_RPC_GET_TRANSACTION_DETAILS::response &res)
 {
     Hash hash;
 
     if (!parse_hash256(req.hash, hash)) {
-        throw JsonRpc::JsonRpcError{
+        throw JsonRpc::JsonRpcError {
             CORE_RPC_ERROR_CODE_WRONG_PARAM,
             "Failed to parse hex representation of transaction hash. Hex = " + req.hash + '.'
         };
@@ -1648,10 +1463,8 @@ bool RpcServer::f_on_transaction_json(
     if (1 == txs.size()) {
         res.tx = txs.front();
     } else {
-        throw JsonRpc::JsonRpcError{
-            CORE_RPC_ERROR_CODE_WRONG_PARAM,
-            "transaction wasn't found. Hash = " + req.hash + '.'
-        };
+        throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_WRONG_PARAM,
+                                      "transaction wasn't found. Hash = " + req.hash + '.' };
     }
 
     Crypto::Hash blockHash;
@@ -1706,18 +1519,14 @@ bool RpcServer::f_on_transaction_json(
     parseTransactionExtra(res.tx.extra, txExtraFields);
     for (const CryptoNote::TransactionExtraField &field : txExtraFields) {
         if (typeid(CryptoNote::TransactionExtraPadding) == field.type()) {
-            res.txDetails.extra.padding.push_back(std::move(
-                boost::get<CryptoNote::TransactionExtraPadding>(field).size
-            ));
+            res.txDetails.extra.padding.push_back(
+                    std::move(boost::get<CryptoNote::TransactionExtraPadding>(field).size));
         } else if (typeid(CryptoNote::TransactionExtraPublicKey) == field.type()) {
             res.txDetails.extra.publicKey = getTransactionPublicKeyFromExtra(res.tx.extra);
         } else if (typeid(CryptoNote::TransactionExtraNonce) == field.type()) {
-            res.txDetails.extra.nonce.push_back(
-                Common::toHex(
+            res.txDetails.extra.nonce.push_back(Common::toHex(
                     boost::get<CryptoNote::TransactionExtraNonce>(field).nonce.data(),
-                    boost::get<CryptoNote::TransactionExtraNonce>(field).nonce.size()
-                )
-            );
+                    boost::get<CryptoNote::TransactionExtraNonce>(field).nonce.size()));
         }
     }
 
@@ -1726,9 +1535,8 @@ bool RpcServer::f_on_transaction_json(
     return true;
 }
 
-bool RpcServer::f_on_pool_json(
-    const F_COMMAND_RPC_GET_POOL::request &req,
-    F_COMMAND_RPC_GET_POOL::response &res)
+bool RpcServer::f_on_pool_json(const F_COMMAND_RPC_GET_POOL::request &req,
+                               F_COMMAND_RPC_GET_POOL::response &res)
 {
     auto pool = m_core.getPoolTransactions();
     for (const Transaction tx : pool) {
@@ -1750,9 +1558,8 @@ bool RpcServer::f_on_pool_json(
     return true;
 }
 
-bool RpcServer::f_on_mempool_json(
-    const COMMAND_RPC_GET_MEMPOOL::request &req,
-    COMMAND_RPC_GET_MEMPOOL::response &res)
+bool RpcServer::f_on_mempool_json(const COMMAND_RPC_GET_MEMPOOL::request &req,
+                                  COMMAND_RPC_GET_MEMPOOL::response &res)
 {
     auto pool = m_core.getMemoryPool();
     for (const CryptoNote::tx_memory_pool::TransactionDetails txd : pool) {
@@ -1795,34 +1602,28 @@ bool RpcServer::f_getMixin(const Transaction &transaction, uint64_t &mixin)
 }
 
 bool RpcServer::k_on_transactions_by_payment_id(
-    const K_COMMAND_RPC_GET_TRANSACTIONS_BY_PAYMENT_ID::request &req,
-    K_COMMAND_RPC_GET_TRANSACTIONS_BY_PAYMENT_ID::response &res)
+        const K_COMMAND_RPC_GET_TRANSACTIONS_BY_PAYMENT_ID::request &req,
+        K_COMMAND_RPC_GET_TRANSACTIONS_BY_PAYMENT_ID::response &res)
 {
     if (req.payment_id.empty()) {
-        throw JsonRpc::JsonRpcError{
-            CORE_RPC_ERROR_CODE_WRONG_PARAM,
-            "Wrong parameters, expected payment_id"
-        };
+        throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_WRONG_PARAM,
+                                      "Wrong parameters, expected payment_id" };
     }
     logger(Logging::DEBUGGING, Logging::WHITE)
-        << "RPC request came: Search by Payment ID: "
-        << req.payment_id;
+            << "RPC request came: Search by Payment ID: " << req.payment_id;
 
     Crypto::Hash paymentId;
     std::vector<Transaction> transactions;
 
     if (!parse_hash256(req.payment_id, paymentId)) {
-        throw JsonRpc::JsonRpcError{
-            CORE_RPC_ERROR_CODE_WRONG_PARAM,
-            "Failed to parse Payment ID: " + req.payment_id + '.'
-        };
+        throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_WRONG_PARAM,
+                                      "Failed to parse Payment ID: " + req.payment_id + '.' };
     }
 
     if (!m_core.getTransactionsByPaymentId(paymentId, transactions)) {
-        throw JsonRpc::JsonRpcError{
-            CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
-            "Internal error: can't get transactions by Payment ID: " + req.payment_id + '.'
-        };
+        throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
+                                      "Internal error: can't get transactions by Payment ID: "
+                                              + req.payment_id + '.' };
     }
 
     for (const Transaction &tx : transactions) {
@@ -1843,9 +1644,8 @@ bool RpcServer::k_on_transactions_by_payment_id(
     return true;
 }
 
-bool RpcServer::f_on_transactions_pool_json(
-    const F_COMMAND_RPC_GET_POOL::request &req,
-    F_COMMAND_RPC_GET_POOL::response &res)
+bool RpcServer::f_on_transactions_pool_json(const F_COMMAND_RPC_GET_POOL::request &req,
+                                            F_COMMAND_RPC_GET_POOL::response &res)
 {
     auto pool = m_core.getPoolTransactions();
     for (const Transaction &tx : pool) {
@@ -1865,9 +1665,8 @@ bool RpcServer::f_on_transactions_pool_json(
     return true;
 }
 
-bool RpcServer::on_getblockcount(
-    const COMMAND_RPC_GETBLOCKCOUNT::request &req,
-    COMMAND_RPC_GETBLOCKCOUNT::response &res)
+bool RpcServer::on_getblockcount(const COMMAND_RPC_GETBLOCKCOUNT::request &req,
+                                 COMMAND_RPC_GETBLOCKCOUNT::response &res)
 {
     res.count = m_core.get_current_blockchain_height();
     res.status = CORE_RPC_STATUS_OK;
@@ -1875,26 +1674,21 @@ bool RpcServer::on_getblockcount(
     return true;
 }
 
-bool RpcServer::on_getblockhash(
-    const COMMAND_RPC_GETBLOCKHASH::request &req,
-    COMMAND_RPC_GETBLOCKHASH::response &res)
+bool RpcServer::on_getblockhash(const COMMAND_RPC_GETBLOCKHASH::request &req,
+                                COMMAND_RPC_GETBLOCKHASH::response &res)
 {
     if (req.size() != 1) {
-        throw JsonRpc::JsonRpcError{
-            CORE_RPC_ERROR_CODE_WRONG_PARAM,
-            "Wrong parameters, expected height"
-        };
+        throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_WRONG_PARAM,
+                                      "Wrong parameters, expected height" };
     }
 
     uint32_t h = static_cast<uint32_t>(req[0]);
     Crypto::Hash blockId = m_core.getBlockIdByHeight(h);
     if (blockId == NULL_HASH) {
-        throw JsonRpc::JsonRpcError{
+        throw JsonRpc::JsonRpcError {
             CORE_RPC_ERROR_CODE_TOO_BIG_HEIGHT,
-            std::string("To big height: ")
-                + std::to_string(h)
-                + ", current blockchain height = "
-                + std::to_string(m_core.get_current_blockchain_height())
+            std::string("To big height: ") + std::to_string(h) + ", current blockchain height = "
+                    + std::to_string(m_core.get_current_blockchain_height())
         };
     }
 
@@ -1907,41 +1701,36 @@ namespace {
 
 uint64_t slow_memmem(void *start_buff, size_t buflen, void *pat, size_t patlen)
 {
-    void* buf = start_buff;
-    void* end = (char*)buf + buflen - patlen;
-    while ((buf = memchr(buf, ((char*)pat)[0], buflen))) {
-        if (buf>end) {
+    void *buf = start_buff;
+    void *end = (char *)buf + buflen - patlen;
+    while ((buf = memchr(buf, ((char *)pat)[0], buflen))) {
+        if (buf > end) {
             return 0;
         }
         if (memcmp(buf, pat, patlen) == 0) {
-            return (char*)buf - (char*)start_buff;
+            return (char *)buf - (char *)start_buff;
         }
-        buf = (char*)buf + 1;
+        buf = (char *)buf + 1;
     }
     return 0;
 }
 
 } // namespace
 
-bool RpcServer::on_getblocktemplate(
-    const COMMAND_RPC_GETBLOCKTEMPLATE::request &req,
-    COMMAND_RPC_GETBLOCKTEMPLATE::response &res)
+bool RpcServer::on_getblocktemplate(const COMMAND_RPC_GETBLOCKTEMPLATE::request &req,
+                                    COMMAND_RPC_GETBLOCKTEMPLATE::response &res)
 {
     if (req.reserve_size > TX_EXTRA_NONCE_MAX_COUNT) {
-        throw JsonRpc::JsonRpcError{
-            CORE_RPC_ERROR_CODE_TOO_BIG_RESERVE_SIZE,
-            "To big reserved size, maximum 255"
-        };
+        throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_TOO_BIG_RESERVE_SIZE,
+                                      "To big reserved size, maximum 255" };
     }
 
     AccountPublicAddress acc = boost::value_initialized<AccountPublicAddress>();
 
     if (!req.wallet_address.size()
         || !m_core.currency().parseAccountAddressString(req.wallet_address, acc)) {
-        throw JsonRpc::JsonRpcError{
-            CORE_RPC_ERROR_CODE_WRONG_WALLET_ADDRESS,
-            "Failed to parse wallet address"
-        };
+        throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_WRONG_WALLET_ADDRESS,
+                                      "Failed to parse wallet address" };
     }
 
     Block b = boost::value_initialized<Block>();
@@ -1949,33 +1738,27 @@ bool RpcServer::on_getblocktemplate(
     blob_reserve.resize(req.reserve_size, 0);
     if (!m_core.get_block_template(b, acc, res.difficulty, res.height, blob_reserve)) {
         logger(ERROR) << "Failed to create block template";
-        throw JsonRpc::JsonRpcError{
-            CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
-            "Internal error: failed to create block template"
-        };
+        throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
+                                      "Internal error: failed to create block template" };
     }
 
     BinaryArray block_blob = toBinaryArray(b);
     PublicKey tx_pub_key = CryptoNote::getTransactionPublicKeyFromExtra(b.baseTransaction.extra);
     if (tx_pub_key == NULL_PUBLIC_KEY) {
         logger(ERROR) << "Failed to find tx pub key in coinbase extra";
-        throw JsonRpc::JsonRpcError{
+        throw JsonRpc::JsonRpcError {
             CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
             "Internal error: failed to find tx pub key in coinbase extra"
         };
     }
 
     if (0 < req.reserve_size) {
-        res.reserved_offset = slow_memmem((void*)block_blob.data(),
-                                          block_blob.size(),
-                                          &tx_pub_key,
+        res.reserved_offset = slow_memmem((void *)block_blob.data(), block_blob.size(), &tx_pub_key,
                                           sizeof(tx_pub_key));
         if (!res.reserved_offset) {
             logger(ERROR) << "Failed to find tx pub key in blockblob";
-            throw JsonRpc::JsonRpcError{
-                CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
-                "Internal error: failed to create block template"
-            };
+            throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
+                                          "Internal error: failed to create block template" };
         }
         // 3 bytes:
         //   - tag for TX_EXTRA_TAG_PUBKEY(1 byte)
@@ -1984,10 +1767,8 @@ bool RpcServer::on_getblocktemplate(
         res.reserved_offset += sizeof(tx_pub_key) + 3;
         if (res.reserved_offset + req.reserve_size > block_blob.size()) {
             logger(ERROR) << "Failed to calculate offset for reserved bytes";
-            throw JsonRpc::JsonRpcError{
-                CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
-                "Internal error: failed to create block template"
-            };
+            throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
+                                          "Internal error: failed to create block template" };
         }
     } else {
         res.reserved_offset = 0;
@@ -1996,10 +1777,8 @@ bool RpcServer::on_getblocktemplate(
     BinaryArray hashing_blob;
     if (!get_block_hashing_blob(b, hashing_blob)) {
         logger(ERROR) << "Failed to get blockhashing_blob";
-        throw JsonRpc::JsonRpcError{
-            CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
-            "Internal error: failed to get blockhashing_blob"
-        };
+        throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
+                                      "Internal error: failed to get blockhashing_blob" };
     }
 
     res.blocktemplate_blob = toHex(block_blob);
@@ -2009,9 +1788,8 @@ bool RpcServer::on_getblocktemplate(
     return true;
 }
 
-bool RpcServer::on_get_currency_id(
-    const COMMAND_RPC_GET_CURRENCY_ID::request &/*req*/,
-    COMMAND_RPC_GET_CURRENCY_ID::response &res)
+bool RpcServer::on_get_currency_id(const COMMAND_RPC_GET_CURRENCY_ID::request & /*req*/,
+                                   COMMAND_RPC_GET_CURRENCY_ID::response &res)
 {
     Hash currencyId = m_core.currency().genesisBlockHash();
     res.currency_id_blob = Common::podToHex(currencyId);
@@ -2019,17 +1797,16 @@ bool RpcServer::on_get_currency_id(
     return true;
 }
 
-bool RpcServer::on_submitblock(
-    const COMMAND_RPC_SUBMITBLOCK::request &req,
-    COMMAND_RPC_SUBMITBLOCK::response &res)
+bool RpcServer::on_submitblock(const COMMAND_RPC_SUBMITBLOCK::request &req,
+                               COMMAND_RPC_SUBMITBLOCK::response &res)
 {
     if (req.size() != 1) {
-        throw JsonRpc::JsonRpcError{ CORE_RPC_ERROR_CODE_WRONG_PARAM, "Wrong param" };
+        throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_WRONG_PARAM, "Wrong param" };
     }
 
     BinaryArray blockblob;
     if (!fromHex(req[0], blockblob)) {
-        throw JsonRpc::JsonRpcError{ CORE_RPC_ERROR_CODE_WRONG_BLOCKBLOB, "Wrong block blob" };
+        throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_WRONG_BLOCKBLOB, "Wrong block blob" };
     }
 
     block_verification_context bvc = boost::value_initialized<block_verification_context>();
@@ -2037,7 +1814,8 @@ bool RpcServer::on_submitblock(
     m_core.handle_incoming_block_blob(blockblob, bvc, true, true);
 
     if (!bvc.m_added_to_main_chain) {
-        throw JsonRpc::JsonRpcError{ CORE_RPC_ERROR_CODE_BLOCK_NOT_ACCEPTED, "Block not accepted" };
+        throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_BLOCK_NOT_ACCEPTED,
+                                      "Block not accepted" };
     }
 
     res.status = CORE_RPC_STATUS_OK;
@@ -2059,12 +1837,8 @@ uint64_t get_block_reward(const Block &blk)
 
 } // namespace
 
-void RpcServer::fill_block_header_response(
-    const Block &blk,
-    bool orphan_status,
-    uint64_t height,
-    const Hash &hash,
-    block_header_response &responce)
+void RpcServer::fill_block_header_response(const Block &blk, bool orphan_status, uint64_t height,
+                                           const Hash &hash, block_header_response &responce)
 {
     responce.major_version = blk.majorVersion;
     responce.minor_version = blk.minorVersion;
@@ -2079,9 +1853,8 @@ void RpcServer::fill_block_header_response(
     responce.reward = get_block_reward(blk);
 }
 
-bool RpcServer::on_get_last_block_header(
-    const COMMAND_RPC_GET_LAST_BLOCK_HEADER::request &req,
-    COMMAND_RPC_GET_LAST_BLOCK_HEADER::response &res)
+bool RpcServer::on_get_last_block_header(const COMMAND_RPC_GET_LAST_BLOCK_HEADER::request &req,
+                                         COMMAND_RPC_GET_LAST_BLOCK_HEADER::response &res)
 {
     uint32_t last_block_height;
     Hash last_block_hash;
@@ -2090,43 +1863,40 @@ bool RpcServer::on_get_last_block_header(
 
     Block last_block;
     if (!m_core.getBlockByHash(last_block_hash, last_block)) {
-        throw JsonRpc::JsonRpcError{
-            CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
-            "Internal error: can't get last block hash."
-        };
+        throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
+                                      "Internal error: can't get last block hash." };
     }
 
     Crypto::Hash tmp_hash = m_core.getBlockIdByHeight(last_block_height);
     bool is_orphaned = last_block_hash != tmp_hash;
-    fill_block_header_response(last_block, is_orphaned, last_block_height, last_block_hash, res.block_header);
+    fill_block_header_response(last_block, is_orphaned, last_block_height, last_block_hash,
+                               res.block_header);
     res.status = CORE_RPC_STATUS_OK;
 
     return true;
 }
 
 bool RpcServer::on_get_block_header_by_hash(
-    const COMMAND_RPC_GET_BLOCK_HEADER_BY_HASH::request &req,
-    COMMAND_RPC_GET_BLOCK_HEADER_BY_HASH::response &res)
+        const COMMAND_RPC_GET_BLOCK_HEADER_BY_HASH::request &req,
+        COMMAND_RPC_GET_BLOCK_HEADER_BY_HASH::response &res)
 {
     Hash block_hash;
 
     if (!parse_hash256(req.hash, block_hash)) {
-        throw JsonRpc::JsonRpcError{
-            CORE_RPC_ERROR_CODE_WRONG_PARAM,
-            "Failed to parse hex representation of block hash. Hex = " + req.hash + '.'
-        };
+        throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_WRONG_PARAM,
+                                      "Failed to parse hex representation of block hash. Hex = "
+                                              + req.hash + '.' };
     }
 
     Block blk;
     if (!m_core.getBlockByHash(block_hash, blk)) {
-        throw JsonRpc::JsonRpcError{
-            CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
-            "Internal error: can't get block by hash. Hash = " + req.hash + '.'
-        };
+        throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
+                                      "Internal error: can't get block by hash. Hash = " + req.hash
+                                              + '.' };
     }
 
     if (blk.baseTransaction.inputs.front().type() != typeid(BaseInput)) {
-        throw JsonRpc::JsonRpcError{
+        throw JsonRpc::JsonRpcError {
             CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
             "Internal error: coinbase transaction in the block has the wrong type"
         };
@@ -2142,26 +1912,23 @@ bool RpcServer::on_get_block_header_by_hash(
 }
 
 bool RpcServer::on_get_block_header_by_height(
-    const COMMAND_RPC_GET_BLOCK_HEADER_BY_HEIGHT::request &req,
-    COMMAND_RPC_GET_BLOCK_HEADER_BY_HEIGHT::response &res)
+        const COMMAND_RPC_GET_BLOCK_HEADER_BY_HEIGHT::request &req,
+        COMMAND_RPC_GET_BLOCK_HEADER_BY_HEIGHT::response &res)
 {
     if (m_core.get_current_blockchain_height() <= req.height) {
-        throw JsonRpc::JsonRpcError{
-            CORE_RPC_ERROR_CODE_TOO_BIG_HEIGHT,
-            std::string("To big height: ")
-                + std::to_string(req.height)
-                + ", current blockchain height = "
-                + std::to_string(m_core.get_current_blockchain_height())
-        };
+        throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_TOO_BIG_HEIGHT,
+                                      std::string("To big height: ") + std::to_string(req.height)
+                                              + ", current blockchain height = "
+                                              + std::to_string(
+                                                      m_core.get_current_blockchain_height()) };
     }
 
     Hash block_hash = m_core.getBlockIdByHeight(static_cast<uint32_t>(req.height));
     Block blk;
     if (!m_core.getBlockByHash(block_hash, blk)) {
-        throw JsonRpc::JsonRpcError{
-            CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
-            "Internal error: can't get block by height. Height = " + std::to_string(req.height) + '.'
-        };
+        throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
+                                      "Internal error: can't get block by height. Height = "
+                                              + std::to_string(req.height) + '.' };
     }
 
     Crypto::Hash tmp_hash = m_core.getBlockIdByHeight(req.height);
@@ -2172,23 +1939,20 @@ bool RpcServer::on_get_block_header_by_height(
     return true;
 }
 
-bool RpcServer::k_on_check_tx_key(
-    const K_COMMAND_RPC_CHECK_TX_KEY::request &req,
-    K_COMMAND_RPC_CHECK_TX_KEY::response &res)
+bool RpcServer::k_on_check_tx_key(const K_COMMAND_RPC_CHECK_TX_KEY::request &req,
+                                  K_COMMAND_RPC_CHECK_TX_KEY::response &res)
 {
     // parse txid
     Crypto::Hash txid;
     if (!parse_hash256(req.txid, txid)) {
-        throw JsonRpc::JsonRpcError{ CORE_RPC_ERROR_CODE_WRONG_PARAM, "Failed to parse txid" };
+        throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_WRONG_PARAM, "Failed to parse txid" };
     }
 
     // parse address
     CryptoNote::AccountPublicAddress address;
     if (!m_core.currency().parseAccountAddressString(req.address, address)) {
-        throw JsonRpc::JsonRpcError{
-            CORE_RPC_ERROR_CODE_WRONG_PARAM,
-            "Failed to parse address " + req.address + '.'
-        };
+        throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_WRONG_PARAM,
+                                      "Failed to parse address " + req.address + '.' };
     }
 
     // parse txkey
@@ -2196,9 +1960,9 @@ bool RpcServer::k_on_check_tx_key(
     size_t size;
     if (!Common::fromHex(req.txkey, &tx_key_hash, sizeof(tx_key_hash), size)
         || size != sizeof(tx_key_hash)) {
-        throw JsonRpc::JsonRpcError{ CORE_RPC_ERROR_CODE_WRONG_PARAM, "Failed to parse txkey" };
+        throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_WRONG_PARAM, "Failed to parse txkey" };
     }
-    Crypto::SecretKey tx_key = *(struct Crypto::SecretKey *) &tx_key_hash;
+    Crypto::SecretKey tx_key = *(struct Crypto::SecretKey *)&tx_key_hash;
 
     // fetch tx
     Transaction tx;
@@ -2211,17 +1975,15 @@ bool RpcServer::k_on_check_tx_key(
     if (1 == txs.size()) {
         tx = txs.front();
     } else {
-        throw JsonRpc::JsonRpcError{
-            CORE_RPC_ERROR_CODE_WRONG_PARAM,
-            "Couldn't find transaction with hash: " + req.txid + '.'
-        };
+        throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_WRONG_PARAM,
+                                      "Couldn't find transaction with hash: " + req.txid + '.' };
     }
     CryptoNote::TransactionPrefix transaction = *static_cast<const TransactionPrefix *>(&tx);
 
     // obtain key derivation
     Crypto::KeyDerivation derivation;
     if (!Crypto::generate_key_derivation(address.viewPublicKey, tx_key, derivation)) {
-        throw JsonRpc::JsonRpcError{
+        throw JsonRpc::JsonRpcError {
             CORE_RPC_ERROR_CODE_WRONG_PARAM,
             "Failed to generate key derivation from supplied parameters"
         };
@@ -2245,7 +2007,7 @@ bool RpcServer::k_on_check_tx_key(
             ++keyIndex;
         }
     } catch (...) {
-        throw JsonRpc::JsonRpcError{ CORE_RPC_ERROR_CODE_INTERNAL_ERROR, "Unknown error" };
+        throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_INTERNAL_ERROR, "Unknown error" };
     }
 
     res.amount = received;
@@ -2256,22 +2018,20 @@ bool RpcServer::k_on_check_tx_key(
 }
 
 bool RpcServer::k_on_check_tx_with_view_key(
-    const K_COMMAND_RPC_CHECK_TX_WITH_PRIVATE_VIEW_KEY::request &req,
-    K_COMMAND_RPC_CHECK_TX_WITH_PRIVATE_VIEW_KEY::response &res)
+        const K_COMMAND_RPC_CHECK_TX_WITH_PRIVATE_VIEW_KEY::request &req,
+        K_COMMAND_RPC_CHECK_TX_WITH_PRIVATE_VIEW_KEY::response &res)
 {
     // parse txid
     Crypto::Hash txid;
     if (!parse_hash256(req.txid, txid)) {
-        throw JsonRpc::JsonRpcError{ CORE_RPC_ERROR_CODE_WRONG_PARAM, "Failed to parse txid" };
+        throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_WRONG_PARAM, "Failed to parse txid" };
     }
 
     // parse address
     CryptoNote::AccountPublicAddress address;
     if (!m_core.currency().parseAccountAddressString(req.address, address)) {
-        throw JsonRpc::JsonRpcError{
-            CORE_RPC_ERROR_CODE_WRONG_PARAM,
-            "Failed to parse address " + req.address + '.'
-        };
+        throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_WRONG_PARAM,
+                                      "Failed to parse address " + req.address + '.' };
     }
 
     // parse view key
@@ -2279,12 +2039,10 @@ bool RpcServer::k_on_check_tx_with_view_key(
     size_t size;
     if (!Common::fromHex(req.view_key, &view_key_hash, sizeof(view_key_hash), size)
         || size != sizeof(view_key_hash)) {
-        throw JsonRpc::JsonRpcError{
-            CORE_RPC_ERROR_CODE_WRONG_PARAM,
-            "Failed to parse private view key"
-        };
+        throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_WRONG_PARAM,
+                                      "Failed to parse private view key" };
     }
-    Crypto::SecretKey viewKey = *(struct Crypto::SecretKey *) &view_key_hash;
+    Crypto::SecretKey viewKey = *(struct Crypto::SecretKey *)&view_key_hash;
 
     // fetch tx
     Transaction tx;
@@ -2297,10 +2055,8 @@ bool RpcServer::k_on_check_tx_with_view_key(
     if (1 == txs.size()) {
         tx = txs.front();
     } else {
-        throw JsonRpc::JsonRpcError{
-            CORE_RPC_ERROR_CODE_WRONG_PARAM,
-            "Couldn't find transaction with hash: " + req.txid + '.'
-        };
+        throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_WRONG_PARAM,
+                                      "Couldn't find transaction with hash: " + req.txid + '.' };
     }
     CryptoNote::TransactionPrefix transaction = *static_cast<const TransactionPrefix *>(&tx);
 
@@ -2310,7 +2066,7 @@ bool RpcServer::k_on_check_tx_with_view_key(
     // obtain key derivation
     Crypto::KeyDerivation derivation;
     if (!Crypto::generate_key_derivation(txPubKey, viewKey, derivation)) {
-        throw JsonRpc::JsonRpcError{
+        throw JsonRpc::JsonRpcError {
             CORE_RPC_ERROR_CODE_WRONG_PARAM,
             "Failed to generate key derivation from supplied parameters"
         };
@@ -2334,7 +2090,7 @@ bool RpcServer::k_on_check_tx_with_view_key(
             ++keyIndex;
         }
     } catch (...) {
-        throw JsonRpc::JsonRpcError{ CORE_RPC_ERROR_CODE_INTERNAL_ERROR, "Unknown error" };
+        throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_INTERNAL_ERROR, "Unknown error" };
     }
     res.amount = received;
     res.outputs = outputs;
@@ -2350,50 +2106,46 @@ bool RpcServer::k_on_check_tx_with_view_key(
     return true;
 }
 
-bool RpcServer::k_on_check_tx_proof(
-    const K_COMMAND_RPC_CHECK_TX_PROOF::request &req,
-    K_COMMAND_RPC_CHECK_TX_PROOF::response &res)
+bool RpcServer::k_on_check_tx_proof(const K_COMMAND_RPC_CHECK_TX_PROOF::request &req,
+                                    K_COMMAND_RPC_CHECK_TX_PROOF::response &res)
 {
     // parse txid
     Crypto::Hash txid;
     if (!parse_hash256(req.tx_id, txid)) {
-        throw JsonRpc::JsonRpcError{ CORE_RPC_ERROR_CODE_WRONG_PARAM, "Failed to parse txid" };
+        throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_WRONG_PARAM, "Failed to parse txid" };
     }
 
     // parse address
     CryptoNote::AccountPublicAddress address;
     if (!m_core.currency().parseAccountAddressString(req.dest_address, address)) {
-        throw JsonRpc::JsonRpcError{
-            CORE_RPC_ERROR_CODE_WRONG_PARAM,
-            "Failed to parse address " + req.dest_address + '.'
-        };
+        throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_WRONG_PARAM,
+                                      "Failed to parse address " + req.dest_address + '.' };
     }
 
     // parse pubkey r*A & signature
     const size_t header_len = strlen("ProofV1");
     if (req.signature.size() < header_len || req.signature.substr(0, header_len) != "ProofV1") {
-        throw JsonRpc::JsonRpcError{
-            CORE_RPC_ERROR_CODE_WRONG_PARAM,
-            "Signature header check error"
-        };
+        throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_WRONG_PARAM,
+                                      "Signature header check error" };
     }
     Crypto::PublicKey rA;
     Crypto::Signature sig;
-    const size_t rA_len = Tools::Base58::encode(std::string((const char *)&rA,
-                                                sizeof(Crypto::PublicKey))).size();
-    const size_t sig_len = Tools::Base58::encode(std::string((const char *)&sig,
-                                                 sizeof(Crypto::Signature))).size();
+    const size_t rA_len =
+            Tools::Base58::encode(std::string((const char *)&rA, sizeof(Crypto::PublicKey))).size();
+    const size_t sig_len =
+            Tools::Base58::encode(std::string((const char *)&sig, sizeof(Crypto::Signature)))
+                    .size();
     std::string rA_decoded;
     std::string sig_decoded;
     if (!Tools::Base58::decode(req.signature.substr(header_len, rA_len), rA_decoded)) {
-        throw JsonRpc::JsonRpcError{ CORE_RPC_ERROR_CODE_WRONG_PARAM, "Signature decoding error" };
+        throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_WRONG_PARAM, "Signature decoding error" };
     }
     if (!Tools::Base58::decode(req.signature.substr(header_len + rA_len, sig_len), sig_decoded)) {
-        throw JsonRpc::JsonRpcError{ CORE_RPC_ERROR_CODE_WRONG_PARAM, "Signature decoding error" };
+        throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_WRONG_PARAM, "Signature decoding error" };
     }
     if (sizeof(Crypto::PublicKey) != rA_decoded.size()
         || sizeof(Crypto::Signature) != sig_decoded.size()) {
-        throw JsonRpc::JsonRpcError{ CORE_RPC_ERROR_CODE_WRONG_PARAM, "Signature decoding error" };
+        throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_WRONG_PARAM, "Signature decoding error" };
     }
     memcpy(&rA, rA_decoded.data(), sizeof(Crypto::PublicKey));
     memcpy(&sig, sig_decoded.data(), sizeof(Crypto::Signature));
@@ -2411,19 +2163,15 @@ bool RpcServer::k_on_check_tx_proof(
     if (1 == txs.size()) {
         tx = txs.front();
     } else {
-        throw JsonRpc::JsonRpcError{
-            CORE_RPC_ERROR_CODE_WRONG_PARAM,
-            "transaction wasn't found. Hash = " + req.tx_id + '.'
-        };
+        throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_WRONG_PARAM,
+                                      "transaction wasn't found. Hash = " + req.tx_id + '.' };
     }
-    CryptoNote::TransactionPrefix transaction = *static_cast<const TransactionPrefix*>(&tx);
+    CryptoNote::TransactionPrefix transaction = *static_cast<const TransactionPrefix *>(&tx);
 
     Crypto::PublicKey R = getTransactionPublicKeyFromExtra(transaction.extra);
     if (R == NULL_PUBLIC_KEY) {
-        throw JsonRpc::JsonRpcError{
-            CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
-            "Tx pubkey was not found"
-        };
+        throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
+                                      "Tx pubkey was not found" };
     }
 
     // check signature
@@ -2434,10 +2182,8 @@ bool RpcServer::k_on_check_tx_proof(
         // obtain key derivation by multiplying scalar 1 to the pubkey r*A included in the signature
         Crypto::KeyDerivation derivation;
         if (!Crypto::generate_key_derivation(rA, I, derivation)) {
-            throw JsonRpc::JsonRpcError{
-                CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
-                "Failed to generate key derivation"
-            };
+            throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
+                                          "Failed to generate key derivation" };
         }
 
         // look for outputs
@@ -2458,7 +2204,7 @@ bool RpcServer::k_on_check_tx_proof(
                 ++keyIndex;
             }
         } catch (...) {
-            throw JsonRpc::JsonRpcError{ CORE_RPC_ERROR_CODE_INTERNAL_ERROR, "Unknown error" };
+            throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_INTERNAL_ERROR, "Unknown error" };
         }
         res.received_amount = received;
         res.outputs = outputs;
@@ -2477,60 +2223,48 @@ bool RpcServer::k_on_check_tx_proof(
     return true;
 }
 
-bool RpcServer::k_on_check_reserve_proof(
-    const K_COMMAND_RPC_CHECK_RESERVE_PROOF::request &req,
-    K_COMMAND_RPC_CHECK_RESERVE_PROOF::response &res)
+bool RpcServer::k_on_check_reserve_proof(const K_COMMAND_RPC_CHECK_RESERVE_PROOF::request &req,
+                                         K_COMMAND_RPC_CHECK_RESERVE_PROOF::response &res)
 {
     // parse address
     CryptoNote::AccountPublicAddress address;
     if (!m_core.currency().parseAccountAddressString(req.address, address)) {
-        throw JsonRpc::JsonRpcError{
-            CORE_RPC_ERROR_CODE_WRONG_PARAM,
-            "Failed to parse address " + req.address + '.'
-        };
+        throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_WRONG_PARAM,
+                                      "Failed to parse address " + req.address + '.' };
     }
 
     // parse sugnature
     static constexpr char header[] = "ReserveProofV1";
     const size_t header_len = strlen(header);
     if (req.signature.size() < header_len || req.signature.substr(0, header_len) != header) {
-        throw JsonRpc::JsonRpcError{
-            CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
-            "Signature header check error"
-        };
+        throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
+                                      "Signature header check error" };
     }
 
     std::string sig_decoded;
     if (!Tools::Base58::decode(req.signature.substr(header_len), sig_decoded)) {
-        throw JsonRpc::JsonRpcError{
-            CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
-            "Signature decoding error"
-        };
+        throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
+                                      "Signature decoding error" };
     }
 
     BinaryArray ba;
     if (!Common::fromHex(sig_decoded, ba)) {
-        throw JsonRpc::JsonRpcError{
-            CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
-            "Proof decoding error"
-        };
+        throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_INTERNAL_ERROR, "Proof decoding error" };
     }
 
     reserve_proof proof_decoded;
     if (!fromBinaryArray(proof_decoded, ba)) {
-        throw JsonRpc::JsonRpcError{
-            CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
-            "BinaryArray decoding error"
-        };
+        throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
+                                      "BinaryArray decoding error" };
     }
 
-    std::vector<reserve_proof_entry>& proofs = proof_decoded.proofs;
+    std::vector<reserve_proof_entry> &proofs = proof_decoded.proofs;
 
     // compute signature prefix hash
     std::string prefix_data = req.message;
     prefix_data.append((const char *)&address, sizeof(CryptoNote::AccountPublicAddress));
     for (size_t i = 0; i < proofs.size(); ++i) {
-        prefix_data.append((const char*)&proofs[i].key_image, sizeof(Crypto::PublicKey));
+        prefix_data.append((const char *)&proofs[i].key_image, sizeof(Crypto::PublicKey));
     }
     Crypto::Hash prefix_hash;
     Crypto::cn_fast_hash(prefix_data.data(), prefix_data.size(), prefix_hash);
@@ -2550,15 +2284,14 @@ bool RpcServer::k_on_check_reserve_proof(
     res.total = 0;
     res.spent = 0;
     for (size_t i = 0; i < proofs.size(); ++i) {
-        const reserve_proof_entry& proof = proofs[i];
+        const reserve_proof_entry &proof = proofs[i];
 
-        CryptoNote::TransactionPrefix tx = *static_cast<const TransactionPrefix*>(&transactions[i]);
+        CryptoNote::TransactionPrefix tx =
+                *static_cast<const TransactionPrefix *>(&transactions[i]);
 
         if (proof.index_in_tx >= tx.outputs.size()) {
-            throw JsonRpc::JsonRpcError{
-                CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
-                "index_in_tx is out of bound"
-            };
+            throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
+                                          "index_in_tx is out of bound" };
         }
 
         const KeyOutput out_key = boost::get<KeyOutput>(tx.outputs[proof.index_in_tx].target);
@@ -2567,12 +2300,9 @@ bool RpcServer::k_on_check_reserve_proof(
         Crypto::PublicKey txPubKey = getTransactionPublicKeyFromExtra(tx.extra);
 
         // check singature for shared secret
-        if (!Crypto::check_tx_proof(prefix_hash,
-                                    address.viewPublicKey,
-                                    txPubKey,
-                                    proof.shared_secret,
-                                    proof.shared_secret_sig)) {
-            //throw JsonRpc::JsonRpcError{
+        if (!Crypto::check_tx_proof(prefix_hash, address.viewPublicKey, txPubKey,
+                                    proof.shared_secret, proof.shared_secret_sig)) {
+            // throw JsonRpc::JsonRpcError{
             //    CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
             //    "Failed to check singature for shared secret"
             //};
@@ -2581,13 +2311,10 @@ bool RpcServer::k_on_check_reserve_proof(
         }
 
         // check signature for key image
-        const std::vector<const Crypto::PublicKey *>& pubs = { &out_key.key };
-        if (!Crypto::check_ring_signature(prefix_hash,
-                                          proof.key_image,
-                                          &pubs[0],
-                                          1,
+        const std::vector<const Crypto::PublicKey *> &pubs = { &out_key.key };
+        if (!Crypto::check_ring_signature(prefix_hash, proof.key_image, &pubs[0], 1,
                                           &proof.key_image_sig)) {
-            //throw JsonRpc::JsonRpcError{
+            // throw JsonRpc::JsonRpcError{
             //    CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
             //    "Failed to check signature for key image"
             //};
@@ -2598,10 +2325,8 @@ bool RpcServer::k_on_check_reserve_proof(
         // check if the address really received the fund
         Crypto::KeyDerivation derivation;
         if (!Crypto::generate_key_derivation(proof.shared_secret, I, derivation)) {
-            throw JsonRpc::JsonRpcError{
-                CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
-                "Failed to generate key derivation"
-            };
+            throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
+                                          "Failed to generate key derivation" };
         }
 
         try {
@@ -2616,7 +2341,7 @@ bool RpcServer::k_on_check_reserve_proof(
                 }
             }
         } catch (...) {
-            throw JsonRpc::JsonRpcError{ CORE_RPC_ERROR_CODE_INTERNAL_ERROR, "Unknown error" };
+            throw JsonRpc::JsonRpcError { CORE_RPC_ERROR_CODE_INTERNAL_ERROR, "Unknown error" };
         }
     }
 
@@ -2630,9 +2355,8 @@ bool RpcServer::k_on_check_reserve_proof(
     return true;
 }
 
-bool RpcServer::on_validate_address(
-    const COMMAND_RPC_VALIDATE_ADDRESS::request &req,
-    COMMAND_RPC_VALIDATE_ADDRESS::response &res)
+bool RpcServer::on_validate_address(const COMMAND_RPC_VALIDATE_ADDRESS::request &req,
+                                    COMMAND_RPC_VALIDATE_ADDRESS::response &res)
 {
     AccountPublicAddress acc = boost::value_initialized<AccountPublicAddress>();
     bool r = m_core.currency().parseAccountAddressString(req.address, acc);
@@ -2646,9 +2370,8 @@ bool RpcServer::on_validate_address(
     return true;
 }
 
-bool RpcServer::on_verify_message(
-    const COMMAND_RPC_VERIFY_MESSAGE::request &req,
-    COMMAND_RPC_VERIFY_MESSAGE::response &res)
+bool RpcServer::on_verify_message(const COMMAND_RPC_VERIFY_MESSAGE::request &req,
+                                  COMMAND_RPC_VERIFY_MESSAGE::response &res)
 {
     Crypto::Hash hash;
     Crypto::cn_fast_hash(req.message.data(), req.message.size(), hash);
@@ -2682,135 +2405,104 @@ bool RpcServer::on_verify_message(
     return true;
 }
 
-bool RpcServer::on_get_difficulty_stat(const COMMAND_RPC_GET_DIFFICULTY_STAT::request &req, COMMAND_RPC_GET_DIFFICULTY_STAT::response &res)
+bool RpcServer::on_resolve_open_alias(const COMMAND_RPC_RESOLVE_OPEN_ALIAS::request &req,
+                                      COMMAND_RPC_RESOLVE_OPEN_ALIAS::response &res)
 {
     try {
-        if(!m_core.get_difficulty_stat(req.height,
-                                       IMinerHandler::stat_period::hour,
-                                       res.hour.block_num,
-                                       res.hour.avg_solve_time,
-                                       res.hour.stddev_solve_time,
-                                       res.hour.outliers_num,
-                                       res.hour.avg_diff,
-                                       res.hour.min_diff,
-                                       res.hour.max_diff))
+        res.address = Common::resolveAlias(req.url);
+
+        AccountPublicAddress ignore;
+        if (!m_core.currency().parseAccountAddressString(res.address, ignore)) {
+            throw JsonRpc::JsonRpcError(CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
+                                        "Address \"" + res.address + "\" is invalid");
+        }
+    } catch (std::exception &e) {
+        throw JsonRpc::JsonRpcError(CORE_RPC_ERROR_CODE_WRONG_PARAM,
+                                    "Couldn't resolve alias: " + std::string(e.what()));
+        return true;
+    }
+
+    res.status = CORE_RPC_STATUS_OK;
+    return true;
+}
+
+bool RpcServer::on_get_difficulty_stat(const COMMAND_RPC_GET_DIFFICULTY_STAT::request &req,
+                                       COMMAND_RPC_GET_DIFFICULTY_STAT::response &res)
+{
+    try {
+        if (!m_core.get_difficulty_stat(req.height, IMinerHandler::stat_period::hour,
+                                        res.hour.block_num, res.hour.avg_solve_time,
+                                        res.hour.stddev_solve_time, res.hour.outliers_num,
+                                        res.hour.avg_diff, res.hour.min_diff, res.hour.max_diff))
             throw std::runtime_error("Failed to get hour difficulty statistics");
-        if(!m_core.get_difficulty_stat(req.height,
-                                       IMinerHandler::stat_period::day,
-                                       res.day.block_num,
-                                       res.day.avg_solve_time,
-                                       res.day.stddev_solve_time,
-                                       res.day.outliers_num,
-                                       res.day.avg_diff,
-                                       res.day.min_diff,
-                                       res.day.max_diff))
+        if (!m_core.get_difficulty_stat(req.height, IMinerHandler::stat_period::day,
+                                        res.day.block_num, res.day.avg_solve_time,
+                                        res.day.stddev_solve_time, res.day.outliers_num,
+                                        res.day.avg_diff, res.day.min_diff, res.day.max_diff))
             throw std::runtime_error("Failed to get day difficulty statistics");
-        if(!m_core.get_difficulty_stat(req.height,
-                                       IMinerHandler::stat_period::week,
-                                       res.week.block_num,
-                                       res.week.avg_solve_time,
-                                       res.week.stddev_solve_time,
-                                       res.week.outliers_num,
-                                       res.week.avg_diff,
-                                       res.week.min_diff,
-                                       res.week.max_diff))
+        if (!m_core.get_difficulty_stat(req.height, IMinerHandler::stat_period::week,
+                                        res.week.block_num, res.week.avg_solve_time,
+                                        res.week.stddev_solve_time, res.week.outliers_num,
+                                        res.week.avg_diff, res.week.min_diff, res.week.max_diff))
             throw std::runtime_error("Failed to get week difficulty statistics");
-        if(!m_core.get_difficulty_stat(req.height,
-                                       IMinerHandler::stat_period::month,
-                                       res.month.block_num,
-                                       res.month.avg_solve_time,
-                                       res.month.stddev_solve_time,
-                                       res.month.outliers_num,
-                                       res.month.avg_diff,
-                                       res.month.min_diff,
-                                       res.month.max_diff))
+        if (!m_core.get_difficulty_stat(req.height, IMinerHandler::stat_period::month,
+                                        res.month.block_num, res.month.avg_solve_time,
+                                        res.month.stddev_solve_time, res.month.outliers_num,
+                                        res.month.avg_diff, res.month.min_diff, res.month.max_diff))
             throw std::runtime_error("Failed to get month difficulty statistics");
-        if(!m_core.get_difficulty_stat(req.height,
-                                       IMinerHandler::stat_period::halfyear,
-                                       res.halfyear.block_num,
-                                       res.halfyear.avg_solve_time,
-                                       res.halfyear.stddev_solve_time,
-                                       res.halfyear.outliers_num,
-                                       res.halfyear.avg_diff,
-                                       res.halfyear.min_diff,
-                                       res.halfyear.max_diff))
+        if (!m_core.get_difficulty_stat(req.height, IMinerHandler::stat_period::halfyear,
+                                        res.halfyear.block_num, res.halfyear.avg_solve_time,
+                                        res.halfyear.stddev_solve_time, res.halfyear.outliers_num,
+                                        res.halfyear.avg_diff, res.halfyear.min_diff,
+                                        res.halfyear.max_diff))
             throw std::runtime_error("Failed to get halfyear difficulty statistics");
-        if(!m_core.get_difficulty_stat(req.height,
-                                       IMinerHandler::stat_period::year,
-                                       res.year.block_num,
-                                       res.year.avg_solve_time,
-                                       res.year.stddev_solve_time,
-                                       res.year.outliers_num,
-                                       res.year.avg_diff,
-                                       res.year.min_diff,
-                                       res.year.max_diff))
+        if (!m_core.get_difficulty_stat(req.height, IMinerHandler::stat_period::year,
+                                        res.year.block_num, res.year.avg_solve_time,
+                                        res.year.stddev_solve_time, res.year.outliers_num,
+                                        res.year.avg_diff, res.year.min_diff, res.year.max_diff))
             throw std::runtime_error("Failed to get year difficulty statistics");
 
         res.blocks30.block_num = 30;
-        if(!m_core.get_difficulty_stat(req.height,
-                                       IMinerHandler::stat_period::by_block_number,
-                                       res.blocks30.block_num,
-                                       res.blocks30.avg_solve_time,
-                                       res.blocks30.stddev_solve_time,
-                                       res.blocks30.outliers_num,
-                                       res.blocks30.avg_diff,
-                                       res.blocks30.min_diff,
-                                       res.blocks30.max_diff))
+        if (!m_core.get_difficulty_stat(req.height, IMinerHandler::stat_period::by_block_number,
+                                        res.blocks30.block_num, res.blocks30.avg_solve_time,
+                                        res.blocks30.stddev_solve_time, res.blocks30.outliers_num,
+                                        res.blocks30.avg_diff, res.blocks30.min_diff,
+                                        res.blocks30.max_diff))
             throw std::runtime_error("Failed to get difficulty statistics for 30 blocks");
         res.blocks720.block_num = 720;
-        if(!m_core.get_difficulty_stat(req.height,
-                                       IMinerHandler::stat_period::by_block_number,
-                                       res.blocks720.block_num,
-                                       res.blocks720.avg_solve_time,
-                                       res.blocks720.stddev_solve_time,
-                                       res.blocks720.outliers_num,
-                                       res.blocks720.avg_diff,
-                                       res.blocks720.min_diff,
-                                       res.blocks720.max_diff))
+        if (!m_core.get_difficulty_stat(req.height, IMinerHandler::stat_period::by_block_number,
+                                        res.blocks720.block_num, res.blocks720.avg_solve_time,
+                                        res.blocks720.stddev_solve_time, res.blocks720.outliers_num,
+                                        res.blocks720.avg_diff, res.blocks720.min_diff,
+                                        res.blocks720.max_diff))
             throw std::runtime_error("Failed to get difficulty statistics for 720 blocks");
         res.blocks5040.block_num = 5040;
-        if(!m_core.get_difficulty_stat(req.height,
-                                       IMinerHandler::stat_period::by_block_number,
-                                       res.blocks5040.block_num,
-                                       res.blocks5040.avg_solve_time,
-                                       res.blocks5040.stddev_solve_time,
-                                       res.blocks5040.outliers_num,
-                                       res.blocks5040.avg_diff,
-                                       res.blocks5040.min_diff,
-                                       res.blocks5040.max_diff))
+        if (!m_core.get_difficulty_stat(req.height, IMinerHandler::stat_period::by_block_number,
+                                        res.blocks5040.block_num, res.blocks5040.avg_solve_time,
+                                        res.blocks5040.stddev_solve_time,
+                                        res.blocks5040.outliers_num, res.blocks5040.avg_diff,
+                                        res.blocks5040.min_diff, res.blocks5040.max_diff))
             throw std::runtime_error("Failed to get difficulty statistics for 5040 blocks");
         res.blocks21900.block_num = 21900;
-        if(!m_core.get_difficulty_stat(req.height,
-                                       IMinerHandler::stat_period::by_block_number,
-                                       res.blocks21900.block_num,
-                                       res.blocks21900.avg_solve_time,
-                                       res.blocks21900.stddev_solve_time,
-                                       res.blocks21900.outliers_num,
-                                       res.blocks21900.avg_diff,
-                                       res.blocks21900.min_diff,
-                                       res.blocks21900.max_diff))
+        if (!m_core.get_difficulty_stat(req.height, IMinerHandler::stat_period::by_block_number,
+                                        res.blocks21900.block_num, res.blocks21900.avg_solve_time,
+                                        res.blocks21900.stddev_solve_time,
+                                        res.blocks21900.outliers_num, res.blocks21900.avg_diff,
+                                        res.blocks21900.min_diff, res.blocks21900.max_diff))
             throw std::runtime_error("Failed to get difficulty statistics for 21900 blocks");
         res.blocks131400.block_num = 131400;
-        if(!m_core.get_difficulty_stat(req.height,
-                                       IMinerHandler::stat_period::by_block_number,
-                                       res.blocks131400.block_num,
-                                       res.blocks131400.avg_solve_time,
-                                       res.blocks131400.stddev_solve_time,
-                                       res.blocks131400.outliers_num,
-                                       res.blocks131400.avg_diff,
-                                       res.blocks131400.min_diff,
-                                       res.blocks131400.max_diff))
+        if (!m_core.get_difficulty_stat(req.height, IMinerHandler::stat_period::by_block_number,
+                                        res.blocks131400.block_num, res.blocks131400.avg_solve_time,
+                                        res.blocks131400.stddev_solve_time,
+                                        res.blocks131400.outliers_num, res.blocks131400.avg_diff,
+                                        res.blocks131400.min_diff, res.blocks131400.max_diff))
             throw std::runtime_error("Failed to get difficulty statistics for 131400 blocks");
         res.blocks262800.block_num = 262800;
-        if(!m_core.get_difficulty_stat(req.height,
-                                       IMinerHandler::stat_period::by_block_number,
-                                       res.blocks262800.block_num,
-                                       res.blocks262800.avg_solve_time,
-                                       res.blocks262800.stddev_solve_time,
-                                       res.blocks262800.outliers_num,
-                                       res.blocks262800.avg_diff,
-                                       res.blocks262800.min_diff,
-                                       res.blocks262800.max_diff))
+        if (!m_core.get_difficulty_stat(req.height, IMinerHandler::stat_period::by_block_number,
+                                        res.blocks262800.block_num, res.blocks262800.avg_solve_time,
+                                        res.blocks262800.stddev_solve_time,
+                                        res.blocks262800.outliers_num, res.blocks262800.avg_diff,
+                                        res.blocks262800.min_diff, res.blocks262800.max_diff))
             throw std::runtime_error("Failed to get difficulty statistics for 262800 blocks");
     } catch (std::system_error &e) {
         res.status = e.what();

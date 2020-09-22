@@ -344,12 +344,7 @@ const T &SwappedVector<T>::operator[](uint64_t index)
     }
 
     if (index >= m_offsets.size()) {
-        // throw std::runtime_error("SwappedVector::operator[]");
-        throw std::runtime_error(std::string(
-                                         std::string("SwappedVector::operator[] in function:") +
-                                         std::string(__FUNCTION__) +
-                                         std::string(", \nfile: ") +
-                                         std::string(__FILE__)).c_str());
+        throw std::runtime_error("SwappedVector::operator[]");
     }
 
     if (!m_itemsFile) {

@@ -1204,6 +1204,16 @@ void InProcessNode::isSynchronized(bool &syncStatus, const Callback &callback)
     ));
 }
 
+void InProcessNode::setRootCert(const std::string &path)
+{
+    return;
+}
+
+void InProcessNode::disableVerify()
+{
+    return;
+}
+
 void InProcessNode::isSynchronizedAsync(bool &syncStatus, const Callback &callback)
 {
     syncStatus = protocol.isSynchronized();

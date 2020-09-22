@@ -22,24 +22,16 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
-
 #include <boost/filesystem.hpp>
-
+#include <crypto/hash.h>
 #include <Common/int-util.h>
 #include <Common/Util.h>
-
-#include <crypto/hash.h>
-
-#include <CryptoNoteCore/Blockchain.h>
 #include <CryptoNoteCore/CryptoNoteFormatUtils.h>
 #include <CryptoNoteCore/CryptoNoteTools.h>
 #include <CryptoNoteCore/TransactionExtra.h>
 #include <CryptoNoteCore/TransactionPool.h>
-#include <CryptoNoteCore/LMDB/BlockchainDB.h>
-
 #include <Global/Constants.h>
 #include <Global/CryptoNoteConfig.h>
-
 #include <Serialization/SerializationTools.h>
 #include <Serialization/BinarySerializationTools.h>
 
@@ -51,31 +43,6 @@ using namespace Logging;
 using namespace Qwertycoin;
 
 namespace CryptoNote {
-
-class LockedTXN
-{
-public:
-    LockedTXN(Blockchain &b)
-      :   mBlockchain(b),
-          mBatch(false)
-    {
-        mBatch = mBlockchain.getDb().batchStart();
-    }
-
-    ~LockedTXN()
-    {
-        try {
-            if (mBatch) {
-                mBlockchain.getDb().batchStop();
-            }
-        } catch (const std::exception &e) {
-            std::cout << "LockedTXN dtor filtering exception: " << e.what() << std::endl;
-        }
-    }
-private:
-    Blockchain &mBlockchain;
-    bool mBatch;
-};
 
 class BlockTemplate
 {
@@ -140,19 +107,17 @@ std::unordered_set<Crypto::Hash> m_validated_transactions;
 
 //---------------------------------------------------------------------------------
 tx_memory_pool::tx_memory_pool(
-    std::unique_ptr<BlockchainDB> &mDb,
     const CryptoNote::Currency &currency,
     CryptoNote::ITransactionValidator &validator,
     CryptoNote::ICore &core,
     CryptoNote::ITimeProvider &timeProvider,
     Logging::ILogger &log,
     bool blockchainIndexesEnabled)
-    : mDb(mDb),
-      m_currency(currency),
+    : m_currency(currency),
       m_validator(validator),
       m_core(core),
       m_timeProvider(timeProvider),
-      m_txCheckInterval(15, timeProvider),
+      m_txCheckInterval(60, timeProvider),
       m_fee_index(boost::get<1>(m_transactions)),
       logger(log, "txpool"),
       m_paymentIdIndex(blockchainIndexesEnabled),
@@ -165,8 +130,7 @@ bool tx_memory_pool::add_tx(
     const Crypto::Hash &id,
     size_t blobSize,
     tx_verification_context &tvc,
-    bool keptByBlock,
-    BlockchainDB &mDb)
+    bool keptByBlock)
 {
     if (!check_inputs_types_supported(tx)) {
         tvc.m_verification_failed = true;
@@ -177,9 +141,6 @@ bool tx_memory_pool::add_tx(
     uint64_t outputs_amount = get_outs_money_amount(tx);
 
     if (!get_inputs_money_amount(tx, inputs_amount)) {
-        logger(ERROR, BRIGHT_RED)
-            << "Failed to get inputs amount of transaction with hash: "
-            << getObjectHash(tx);
         tvc.m_verification_failed = true;
         return false;
     }
@@ -245,44 +206,16 @@ bool tx_memory_pool::add_tx(
 
     // check inputs
     bool inputsValid = m_validator.checkTransactionInputs(tx, maxUsedBlock);
-    bool r = Tools::getDefaultDBType() == "lmdb";
-    TxPoolTxMetaT meta;
+
     if (!inputsValid) {
         if (!keptByBlock) {
             logger(INFO) << "tx used wrong inputs, rejected";
             tvc.m_verification_failed = true;
             return false;
-        } else if (r && keptByBlock) {
-            meta.blobSize = blobSize;
-            meta.fee = fee;
-            meta.maxUsedBlockId = NULL_HASH;
-            meta.maxUsedBlockHeight = 0;
-            meta.lastFailedHeight = 0;
-            meta.lastFailedId = NULL_HASH;
-            meta.keptByBlock = keptByBlock;
-            meta.receiveTime = m_timeProvider.now();
-            meta.lastRelayedTime = m_timeProvider.now();
-            meta.doubleSpendSeen = haveSpentInputs(tx);
-            memset(meta.padding, 0, sizeof(meta.padding));
-
-            try {
-                mDb.blockTxnStart(false);
-                CryptoNote::Transaction txC = tx;
-                mDb.addTxPoolTx(txC, meta);
-                mDb.blockTxnStop();
-                m_ttlIndex.emplace(std::make_pair(id, ttl.ttl));
-            } catch (const std::exception &e) {
-                logger(ERROR, BRIGHT_RED)
-                    << "transaction already exists at inserting in memory pool: "
-                    << e.what();
-                return false;
-            }
-
-            tvc.m_added_to_pool = true;
-            tvc.m_verification_failed = false;
         }
 
         maxUsedBlock.clear();
+        tvc.m_verifivation_impossible = true;
     }
 
     if (!keptByBlock) {
@@ -306,7 +239,7 @@ bool tx_memory_pool::add_tx(
     }
 
     // add to pool
-    if (!r) {
+    {
         TransactionDetails txd;
 
         txd.id = id;
@@ -330,33 +263,6 @@ bool tx_memory_pool::add_tx(
         if (ttl.ttl != 0) {
             m_ttlIndex.emplace(std::make_pair(id, ttl.ttl));
         }
-    } else {
-        meta.blobSize = blobSize;
-        meta.keptByBlock = keptByBlock;
-        meta.fee = fee;
-        meta.maxUsedBlockId = maxUsedBlock.id;
-        meta.maxUsedBlockHeight = maxUsedBlock.height;
-        meta.lastFailedHeight = 0;
-        meta.lastFailedId = NULL_HASH;
-        meta.receiveTime = m_timeProvider.now();
-        meta.lastRelayedTime = m_timeProvider.now();
-        meta.doubleSpendSeen = false;
-        memset(meta.padding, 0, sizeof(meta.padding));
-
-        try {
-            mDb.blockTxnStart(false);
-            mDb.removeTxPoolTx(getObjectHash(tx));
-            mDb.blockTxnStop();
-            CryptoNote::Transaction txC = tx;
-            mDb.blockTxnStart(false);
-            mDb.addTxPoolTx(txC, meta);
-            mDb.blockTxnStop();
-        } catch (const std::exception &e) {
-            logger(ERROR,BRIGHT_RED)
-                << "internal error: transaction already exists at inserting in memory pool: "
-                << e.what();
-            return false;
-        }
     }
 
     tvc.m_added_to_pool = true;
@@ -372,22 +278,16 @@ bool tx_memory_pool::add_tx(
     return true;
 }
 
-bool tx_memory_pool::add_tx(const Transaction &tx,
-                            tx_verification_context &tvc,
-                            bool keeped_by_block,
-                            BlockchainDB &mDb)
+bool tx_memory_pool::add_tx(const Transaction &tx,tx_verification_context &tvc,bool keeped_by_block)
 {
     Crypto::Hash h = NULL_HASH;
     size_t blobSize = 0;
     getObjectHash(tx, h, blobSize);
 
-    return add_tx(tx, h, blobSize, tvc, keeped_by_block, mDb);
+    return add_tx(tx, h, blobSize, tvc, keeped_by_block);
 }
 
-bool tx_memory_pool::take_tx(const Crypto::Hash &id,
-                             Transaction &tx,
-                             size_t &blobSize,
-                             uint64_t &fee)
+bool tx_memory_pool::take_tx(const Crypto::Hash &id,Transaction &tx,size_t &blobSize,uint64_t &fee)
 {
     std::lock_guard<std::recursive_mutex> lock(m_transactions_lock);
     auto it = m_transactions.find(id);
@@ -408,17 +308,8 @@ bool tx_memory_pool::take_tx(const Crypto::Hash &id,
 
 size_t tx_memory_pool::get_transactions_count() const
 {
-    bool r = Tools::getDefaultDBType() != "lmdb";
     std::lock_guard<std::recursive_mutex> lock(m_transactions_lock);
-    size_t size;
-
-    if (r) {
-        size = m_transactions.size();
-    } else {
-        size = mDb->getTxPoolTxCount();
-    }
-
-    return size;
+    return m_transactions.size();
 }
 
 void tx_memory_pool::get_transactions(std::list<Transaction> &txs) const
@@ -427,23 +318,6 @@ void tx_memory_pool::get_transactions(std::list<Transaction> &txs) const
     for (const auto &tx_vt : m_transactions) {
         txs.push_back(tx_vt.tx);
     }
-}
-
-void tx_memory_pool::get_transactions(std::list<Transaction> &txs,
-                                      bool includeUnrelayedTxes,
-                                      BlockchainDB &mDb) const
-{
-    std::lock_guard<std::recursive_mutex> lock(m_transactions_lock);
-    mDb.forAllTxPoolTxes([&txs](const Crypto::Hash &txId,
-                                const TxPoolTxMetaT &meta,
-                                const CryptoNote::blobData *bd) {
-        Transaction tx;
-        if (!parseAndValidateTxFromBlob(*bd, tx)) {
-            return true;
-        }
-        txs.push_back(tx);
-        return true;
-    }, true, includeUnrelayedTxes);
 }
 
 void tx_memory_pool::getMemoryPool(std::list<tx_memory_pool::TransactionDetails> txs) const
@@ -929,13 +803,11 @@ bool tx_memory_pool::addTransactionInputs(
                 return false;
             }
             auto ins_res = kei_image_set.insert(id);
-            /*
             if (!(ins_res.second)) {
                 logger(ERROR, BRIGHT_RED)
                     << "internal error: try to insert duplicate iterator in key_image set";
                 return false;
             }
-             */
         } else if (in.type() == typeid(MultisignatureInput)) {
             if (!keptByBlock) {
                 const auto &msig = boost::get<MultisignatureInput>(in);
