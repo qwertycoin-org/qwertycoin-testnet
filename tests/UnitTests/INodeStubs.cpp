@@ -63,14 +63,6 @@ bool INodeDummyStub::removeObserver(INodeObserver* observer) {
   return observerManager.remove(observer);
 }
 
-void INodeDummyStub::setRootCert(const std::string &path) {
-    if (this->m_ssl_cert.empty()) this->m_ssl_cert = path;
-}
-
-void INodeDummyStub::disableVerify() {
-    if (!this->m_ssl_no_verify) this->m_ssl_no_verify = true;
-}
-
 void INodeTrivialRefreshStub::getNewBlocks(std::vector<Crypto::Hash>&& knownBlockIds, std::vector<block_complete_entry>& newBlocks, uint32_t& startHeight, const Callback& callback)
 {
   m_asyncCounter.addAsyncContext();
@@ -692,14 +684,6 @@ void INodeTrivialRefreshStub::getMultisignatureOutputByGlobalIndex(uint64_t amou
   std::unique_lock<std::mutex> lock(m_walletLock);
   std::thread task(&INodeTrivialRefreshStub::doGetOutByMSigGIndex, this, amount, gindex, std::ref(out), callback);
   task.detach();
-}
-
-void INodeTrivialRefreshStub::setRootCert(const std::string &path) {
-    if (this->m_ssl_cert.empty()) this->m_ssl_cert = path;
-}
-
-void INodeTrivialRefreshStub::disableVerify() {
-    if (!this->m_ssl_no_verify) this->m_ssl_no_verify = true;
 }
 
 void INodeTrivialRefreshStub::doGetOutByMSigGIndex(uint64_t amount, uint32_t gindex, CryptoNote::MultisignatureOutput& out, const Callback& callback) {

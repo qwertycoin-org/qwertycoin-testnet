@@ -160,6 +160,8 @@ static_assert(UPGRADE_VOTING_WINDOW > 1, "Bad UPGRADE_VOTING_WINDOW");
 const char     CRYPTONOTE_BLOCKS_FILENAME[]                  = "tn_blocks.bin";
 const char     CRYPTONOTE_BLOCKINDEXES_FILENAME[]            = "tn_blockindexes.bin";
 const char     CRYPTONOTE_BLOCKSCACHE_FILENAME[]             = "tn_blockscache.bin";
+const char     CRYPTONOTE_BLOCKCHAINDATA_LOCK_FILENAME[]     = "tn_mdb.lock";
+const char     CRYPTONOTE_BLOCKCHAINDATA_FILENAME[]          = "tn_data.mdb";
 const char     CRYPTONOTE_POOLDATA_FILENAME[]                = "tn_poolstate.dat";
 const char     P2P_NET_DATA_FILENAME[]                       = "tn_p2pstate.dat";
 const char     CRYPTONOTE_BLOCKCHAIN_INDICES_FILENAME[]      = "tn_blockchainindices.bin";
@@ -197,15 +199,7 @@ const size_t   COMMAND_RPC_GET_BLOCKS_FAST_MAX_COUNT         =  1000;
 
 const int      P2P_DEFAULT_PORT                              =  8196;
 const int      RPC_DEFAULT_PORT                              =  8197;
-const int      RPC_DEFAULT_SSL_PORT                          =  8297;
 const int      SERVICE_DEFAULT_PORT                          =  8198;
-const int      SERVICE_DEFAULT_SSL_PORT                      =  8298;
-const int      WALLET_RPC_DEFAULT_PORT                       =  8199;
-const int      WALLET_RPC_DEFAULT_SSL_PORT                   =  8299;
-
-const char     RPC_DEFAULT_CHAIN_FILE[]                      = "rpc_server.crt";
-const char     RPC_DEFAULT_KEY_FILE[]                        = "rpc_server,key";
-const char     RPC_DEFAULT_DH_FILE[]                         = "rpc_server.pem";
 
 const size_t   P2P_LOCAL_WHITE_PEERLIST_LIMIT                =  1000;
 const size_t   P2P_LOCAL_GRAY_PEERLIST_LIMIT                 =  5000;

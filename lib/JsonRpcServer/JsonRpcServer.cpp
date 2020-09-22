@@ -50,20 +50,12 @@ JsonRpcServer::JsonRpcServer(System::Dispatcher &sys,
 
 void JsonRpcServer::start(const std::string &bindAddress,
                           uint16_t bindPort,
-                          uint16_t bindPortSSL,
-                          bool serverSSLEnable,
                           const std::string &m_rpcUser,
                           const std::string &m_rpcPassword)
 {
-    HttpServer::start(bindAddress, bindPort, bindPortSSL, serverSSLEnable, m_rpcUser, m_rpcPassword);
+    HttpServer::start(bindAddress, bindPort, m_rpcUser, m_rpcPassword);
     stopEvent.wait();
     HttpServer::stop();
-}
-
-void JsonRpcServer::setCerts(const std::string& chain_file,
-                             const std::string& key_file,
-                             const std::string& dh_file){
-    HttpServer::setCerts(chain_file, key_file, dh_file);
 }
 
 void JsonRpcServer::processRequest(const CryptoNote::HttpRequest &req,

@@ -355,11 +355,6 @@ set(QwertycoinTests_UnitTests_SOURCES
 )
 
 set(QwertycoinTests_UnitTests_LIBS
-    Boost::atomic
-    Boost::filesystem
-    Boost::regex
-    Boost::system
-    Boost::thread
     codecov
     GTest::gtest_main
     QwertycoinFramework::CryptoNoteCore
@@ -371,12 +366,6 @@ set(QwertycoinTests_UnitTests_LIBS
     QwertycoinFramework::Wallet
     QwertycoinTests::TestGenerator
 )
-
-if (BUILD_WITH_SSL)
-    list(APPEND QwertycoinTests_UnitTests_LIBS
-            OpenSSL::SSL
-            OpenSSL::Crypto)
-endif()
 
 add_executable(QwertycoinTests_UnitTests ${QwertycoinTests_UnitTests_SOURCES})
 add_executable(QwertycoinTests::UnitTests ALIAS QwertycoinTests_UnitTests)

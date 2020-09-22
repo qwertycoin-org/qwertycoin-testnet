@@ -31,13 +31,8 @@ public:
     static void initOptions(boost::program_options::options_description &desc);
     void init(const boost::program_options::variables_map &options);
 
-    std::string m_daemon_host;
-    uint16_t m_daemon_port;
-    uint16_t m_daemon_port_ssl;
-    bool m_enable_ssl;
-    std::string m_chain_file = "";
-    std::string m_key_file = "";
-    std::string m_dh_file = "";
+    std::string daemonHost;
+    uint16_t daemonPort;
 };
 
 } // namespace PaymentService

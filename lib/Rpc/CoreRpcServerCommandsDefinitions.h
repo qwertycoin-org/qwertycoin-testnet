@@ -1503,29 +1503,4 @@ struct K_COMMAND_RPC_CHECK_RESERVE_PROOF
     };
 };
 
-struct COMMAND_RPC_RESOLVE_OPEN_ALIAS
-{
-    struct request
-    {
-        void serialize(ISerializer &s)
-        {
-            KV_MEMBER(url)
-        }
-
-        std::string url;
-    };
-
-    struct response
-    {
-        void serialize(ISerializer &s)
-        {
-            KV_MEMBER(address)
-            KV_MEMBER(status)
-        }
-
-        std::string address;
-        std::string status;
-    };
-};
-
 } // namespace CryptoNote

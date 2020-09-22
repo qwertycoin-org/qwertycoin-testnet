@@ -21,27 +21,19 @@
 
 #include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
-
-#include <Common/FormatTools.h>
 #include <Common/SignalHandler.h>
 #include <Common/StringTools.h>
 #include <Common/PathTools.h>
-
 #include <crypto/hash.h>
-
 #include <Breakpad/Breakpad.h>
-
 #include <CryptoNoteCore/CryptoNoteTools.h>
 #include <CryptoNoteCore/Core.h>
 #include <CryptoNoteCore/CoreConfig.h>
 #include <CryptoNoteCore/Currency.h>
 #include <CryptoNoteCore/MinerConfig.h>
-
 #include <CryptoNoteProtocol/CryptoNoteProtocolHandler.h>
 #include <CryptoNoteProtocol/ICryptoNoteProtocolQuery.h>
-
 #include <Global/Checkpoints.h>
-
 #include <Logging/LoggerManager.h>
 #include <P2p/NetNode.h>
 #include <P2p/NetNodeConfig.h>
@@ -235,6 +227,8 @@ int main(int argc, char *argv[])
         command_line::add_arg(desc_cmd_only, arg_os_version);
         // tools::get_default_data_dir() can't be called during static initialization
         command_line::add_arg(desc_cmd_only, command_line::arg_data_dir, Tools::getDefaultDataDirectory());
+        command_line::add_arg(desc_cmd_only, command_line::arg_db_type, Tools::getDefaultDBType());
+        command_line::add_arg(desc_cmd_only, command_line::arg_db_sync_mode, Tools::getDefaultDBSyncMode());
         command_line::add_arg(desc_cmd_only, arg_config_file);
 
         command_line::add_arg(desc_cmd_sett, arg_log_file);
@@ -262,8 +256,6 @@ int main(int argc, char *argv[])
         desc_options.add(desc_cmd_only).add(desc_cmd_sett);
 
         po::variables_map vm;
-        boost::system::error_code ec;
-        std::string data_dir = "";
         bool r = command_line::handle_error_helper(desc_options, [&]() {
             po::store(po::parse_command_line(argc, argv, desc_options), vm);
 
@@ -273,8 +265,10 @@ int main(int argc, char *argv[])
                 return false;
             }
 
-            data_dir = command_line::get_arg(vm, command_line::arg_data_dir);
+            std::string data_dir = command_line::get_arg(vm, command_line::arg_data_dir);
             std::string config = command_line::get_arg(vm, arg_config_file);
+            std::string db_type = command_line::get_arg(vm, command_line::arg_db_type);
+            std::string db_sync_mode = command_line::get_arg(vm, command_line::arg_db_sync_mode);
 
             boost::filesystem::path data_dir_path(data_dir);
             boost::filesystem::path config_path(config);
@@ -282,6 +276,7 @@ int main(int argc, char *argv[])
                 config_path = data_dir_path / config_path;
             }
 
+            boost::system::error_code ec;
             if (boost::filesystem::exists(config_path, ec)) {
                 po::store(po::parse_config_file<char>(
                     config_path.string<std::string>().c_str(),
@@ -357,8 +352,12 @@ int main(int argc, char *argv[])
                 << CryptoNote::CRYPTONOTE_NAME << "d --" << arg_print_genesis_tx.name;
             return 1;
         }
+
+        std::unique_ptr<BlockchainDB> fakeDB(newDB(Tools::getDefaultDBType()));
         CryptoNote::Currency currency = currencyBuilder.currency();
         CryptoNote::core ccore(
+            fakeDB,
+            nullptr,
             currency,
             nullptr,
             logManager,
@@ -422,20 +421,6 @@ int main(int argc, char *argv[])
         ccore.set_cryptonote_protocol(&cprotocol);
         DaemonCommandsHandler dch(ccore, p2psrv, logManager, cprotocol, &rpcServer);
 
-        boost::filesystem::path data_dir_path(data_dir);
-        boost::filesystem::path chain_file_path(rpcConfig.getChainFile());
-        boost::filesystem::path key_file_path(rpcConfig.getKeyFile());
-        boost::filesystem::path dh_file_path(rpcConfig.getDhFile());
-        if (!chain_file_path.has_parent_path()) {
-            chain_file_path = data_dir_path / chain_file_path;
-        }
-        if (!key_file_path.has_parent_path()) {
-            key_file_path = data_dir_path / key_file_path;
-        }
-        if (!dh_file_path.has_parent_path()) {
-            dh_file_path = data_dir_path / dh_file_path;
-        }
-
         // initialize objects
         logger(INFO) << "Initializing p2p server...";
         if (!p2psrv.init(netNodeConfig)) {
@@ -445,8 +430,22 @@ int main(int argc, char *argv[])
         logger(INFO) << "P2p server initialized OK";
 
         // initialize core here
+        bool loadExisting = false;
+        boost::filesystem::path folder(coreConfig.configFolder);
+        r = coreConfig.dbType == "lmdb";
+        if (!r) {
+            if (boost::filesystem::exists(folder / "blockindexes.bin")) {
+                loadExisting = true;
+            }
+        } else if (r) {
+            boost::filesystem::path dbFolder = folder / "lmdb";
+            if (boost::filesystem::exists(dbFolder / "data.mdb")) {
+                loadExisting = true;
+            }
+        }
+
         logger(INFO) << "Initializing core...";
-        if (!ccore.init(coreConfig, minerConfig, true)) {
+        if (!ccore.init(coreConfig, minerConfig, loadExisting)) {
             logger(ERROR, BRIGHT_RED) << "Failed to initialize core";
             return 1;
         }
@@ -469,52 +468,31 @@ int main(int argc, char *argv[])
             dch.start_handling();
         }
 
-        bool server_ssl_enable = false;
-        if (rpcConfig.isEnabledSSL()) {
-            if (boost::filesystem::exists(chain_file_path, ec) &&
-                boost::filesystem::exists(key_file_path, ec) &&
-                boost::filesystem::exists(dh_file_path, ec)) {
-                rpcServer.setCerts(boost::filesystem::canonical(chain_file_path).string(),
-                                   boost::filesystem::canonical(key_file_path).string(),
-                                   boost::filesystem::canonical(dh_file_path).string());
-                server_ssl_enable = true;
-            }
-            else {
-                logger(ERROR, BRIGHT_RED) << "Start RPC SSL server was canceled because certificate file(s) could not be found" << std::endl;
+        logger(INFO) << "Starting core rpc server on address " << rpcConfig.getBindAddress();
+        rpcServer.start(rpcConfig.bindIp, rpcConfig.bindPort);
+        rpcServer.restrictRPC(command_line::get_arg(vm, arg_restricted_rpc));
+        rpcServer.enableCors(command_line::get_arg(vm, arg_enable_cors));
+        if (command_line::has_arg(vm, arg_set_fee_address)) {
+            std::string addr_str = command_line::get_arg(vm, arg_set_fee_address);
+            if (!addr_str.empty()) {
+                AccountPublicAddress acc = boost::value_initialized<AccountPublicAddress>();
+                if (!currency.parseAccountAddressString(addr_str, acc)) {
+                    logger(ERROR, BRIGHT_RED) << "Bad fee address: " << addr_str;
+                    return 1;
+                }
+                rpcServer.setFeeAddress(addr_str, acc);
             }
         }
-        std::string ssl_info = "";
-        if (server_ssl_enable) ssl_info += ", SSL on address " + rpcConfig.getBindAddressSSL();
-        logger(INFO) << "Starting core rpc server on address " << rpcConfig.getBindAddress() << ssl_info;
-        rpcServer.start(rpcConfig.getBindIP(), rpcConfig.getBindPort(), rpcConfig.getBindPortSSL(), server_ssl_enable);
-        rpcServer.restrictRPC(rpcConfig.restrictedRPC);
-        rpcServer.enableCors(rpcConfig.enableCors);
-        if (!rpcConfig.nodeFeeAddress.empty() && !rpcConfig.nodeFeeAmountStr.empty()) {
-            AccountPublicAddress acc = boost::value_initialized<AccountPublicAddress>();
-            if (!currency.parseAccountAddressString(rpcConfig.nodeFeeAddress, acc)) {
-                logger(ERROR, BRIGHT_RED) << "Bad fee address: " << rpcConfig.nodeFeeAddress;
-                return 1;
+        if (command_line::has_arg(vm, arg_set_view_key)) {
+            std::string vk_str = command_line::get_arg(vm, arg_set_view_key);
+            if (!vk_str.empty()) {
+                rpcServer.setViewKey(vk_str);
             }
-            rpcServer.setFeeAddress(rpcConfig.nodeFeeAddress, acc);
-
-            uint64_t fee;
-            if (!Common::Format::parseAmount(rpcConfig.nodeFeeAmountStr, fee)) {
-                logger(ERROR, BRIGHT_RED) << "Couldn't parse fee amount";
-                return 1;
-            }
-            if (fee > CryptoNote::parameters::COIN) {
-                logger(ERROR, BRIGHT_RED) << "Maximum allowed fee is "
-                                          << Common::Format::formatAmount(CryptoNote::parameters::COIN);
-                return 1;
-            }
-
-            rpcServer.setFeeAmount(fee);
         }
-        if (!rpcConfig.nodeFeeViewKey.empty()) {
-            rpcServer.setViewKey(rpcConfig.nodeFeeViewKey);
-        }
-        if (!rpcConfig.contactInfo.empty()) {
-            rpcServer.setContactInfo(rpcConfig.contactInfo);
+        if (command_line::has_arg(vm, arg_set_contact)) {
+            if (!contact_str.empty()) {
+                rpcServer.setContactInfo(contact_str);
+            }
         }
         logger(INFO) << "Core rpc server started ok";
 

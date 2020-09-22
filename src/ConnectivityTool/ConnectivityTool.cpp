@@ -18,9 +18,7 @@
 
 #include <boost/optional.hpp>
 #include <boost/program_options.hpp>
-
 #include <Breakpad/Breakpad.h>
-
 #include <Common/CommandLine.h>
 #include <Common/StringTools.h>
 #include <crypto/crypto.h>
@@ -102,7 +100,7 @@ const command_line::arg_descriptor<bool> arg_request_net_state = {
 const command_line::arg_descriptor<bool> arg_get_daemon_info = {
     "rpc_get_daemon_info",
     "request daemon state info vie rpc (--rpc_port option should be set ).",
-    static_cast<bool>(""),
+    "",
     true
 };
 
@@ -268,8 +266,7 @@ bool handle_get_daemon_info(po::variables_map &vm)
         HttpClient httpClient(
             dispatcher,
             command_line::get_arg(vm, arg_ip),
-            command_line::get_arg(vm, arg_rpc_port),
-            false
+            command_line::get_arg(vm, arg_rpc_port)
         );
 
         CryptoNote::COMMAND_RPC_GET_INFO::request req;

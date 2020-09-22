@@ -154,7 +154,7 @@ bool Currency::getBlockReward(
     // Consistency
     double consistency = 1.0;
     double exponent = 0.25; 
-    if (height >= CryptoNote::parameters::UPGRADE_HEIGHT_REWARD_SCHEME && difficultyTarget() != 0) {
+    if (height >= CryptoNote::parameters::UPGRADE_HEIGHT_V6 && difficultyTarget() != 0) {
         // blockTarget is (Timestamp of New Block - Timestamp of Previous Block)
         consistency = (double) blockTarget / (double) difficultyTarget();
 
@@ -174,6 +174,7 @@ bool Currency::getBlockReward(
     // Tail emission
 
     uint64_t baseReward = ((m_moneySupply - alreadyGeneratedCoins) >> m_emissionSpeedFactor) * consistency;
+    logger(DEBUGGING, BRIGHT_CYAN) << "getBlockReward baseReward: " << baseReward;
     if (alreadyGeneratedCoins + CryptoNote::parameters::TAIL_EMISSION_REWARD >= m_moneySupply
         || baseReward < CryptoNote::parameters::TAIL_EMISSION_REWARD) {
         baseReward = CryptoNote::parameters::TAIL_EMISSION_REWARD;
@@ -198,6 +199,15 @@ bool Currency::getBlockReward(
 
     emissionChange = penalizedBaseReward - (fee - penalizedFee);
     reward = penalizedBaseReward + penalizedFee;
+
+    logger(DEBUGGING, BRIGHT_CYAN) << "getBlockReward baseReward: " << baseReward;
+    logger(DEBUGGING, BRIGHT_CYAN) << "getBlockReward blockGrantedFullRewardZone: " << blockGrantedFullRewardZone;
+    logger(DEBUGGING, BRIGHT_CYAN) << "getBlockReward medianSize: " << medianSize;
+    logger(DEBUGGING, BRIGHT_CYAN) << "getBlockReward penalizedBaseReward: " << penalizedBaseReward;
+    logger(DEBUGGING, BRIGHT_CYAN) << "getBlockReward penalizedFee: " << penalizedFee;
+    logger(DEBUGGING, BRIGHT_CYAN) << "getBlockReward fee: " << fee;
+    logger(DEBUGGING, BRIGHT_CYAN) << "getBlockReward emissionChange: " << emissionChange;
+    logger(DEBUGGING, BRIGHT_CYAN) << "getBlockReward reward: " << reward;
 
     return true;
 }

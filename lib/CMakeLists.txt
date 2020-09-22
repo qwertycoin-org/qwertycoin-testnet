@@ -8,13 +8,13 @@ message(STATUS "Generated version.h header: ${CMAKE_CURRENT_BINARY_DIR}/version.
 
 set(QwertycoinFramework_INCLUDE_DIRS
     "${Boost_INCLUDE_DIRS}"
-    "${OPENSSL_INCLUDE_DIR}"
     "${Breakpad_INCLUDE_DIRS}"
     "${MINIUPNP_INCLUDE_DIRS}"
     "${SPARSEHASH_INCLUDE_DIRS}"
     "${CMAKE_CURRENT_BINARY_DIR}"
     "${CMAKE_CURRENT_LIST_DIR}"
     "${CMAKE_CURRENT_LIST_DIR}/../include"
+    "${CMAKE_CURRENT_LIST_DIR}/../external"
 )
 
 if(MSVC)
@@ -126,8 +126,6 @@ set(QwertycoinFramework_Common_SOURCES
     "${CMAKE_CURRENT_LIST_DIR}/Common/ArrayView.h"
     "${CMAKE_CURRENT_LIST_DIR}/Common/Base58.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/Common/Base58.h"
-    "${CMAKE_CURRENT_LIST_DIR}/Common/Base64.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/Common/Base64.h"
     "${CMAKE_CURRENT_LIST_DIR}/Common/BlockingQueue.h"
     "${CMAKE_CURRENT_LIST_DIR}/Common/CommandLine.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/Common/CommandLine.h"
@@ -137,8 +135,6 @@ set(QwertycoinFramework_Common_SOURCES
     "${CMAKE_CURRENT_LIST_DIR}/Common/ConsoleTools.h"
     "${CMAKE_CURRENT_LIST_DIR}/Common/DnsTools.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/Common/DnsTools.h"
-    "${CMAKE_CURRENT_LIST_DIR}/Common/FormatTools.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/Common/FormatTools.h"
     "${CMAKE_CURRENT_LIST_DIR}/Common/FileMappedVector.h"
     "${CMAKE_CURRENT_LIST_DIR}/Common/IInputStream.h"
     "${CMAKE_CURRENT_LIST_DIR}/Common/IOutputStream.h"
@@ -173,6 +169,8 @@ set(QwertycoinFramework_Common_SOURCES
     "${CMAKE_CURRENT_LIST_DIR}/Common/StringUtils.h"
     "${CMAKE_CURRENT_LIST_DIR}/Common/StringView.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/Common/StringView.h"
+    "${CMAKE_CURRENT_LIST_DIR}/Common/ThreadPool.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/Common/ThreadPool.h"
     "${CMAKE_CURRENT_LIST_DIR}/Common/Util.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/Common/Util.h"
     "${CMAKE_CURRENT_LIST_DIR}/Common/Varint.h"
@@ -181,10 +179,10 @@ set(QwertycoinFramework_Common_SOURCES
     "${CMAKE_CURRENT_LIST_DIR}/Common/VectorUtils.h"
     "${CMAKE_CURRENT_LIST_DIR}/Common/int-util.h"
     "${CMAKE_CURRENT_LIST_DIR}/Common/pod-class.h"
-    "${CMAKE_CURRENT_LIST_DIR}/Common/static_assert.h")
+    "${CMAKE_CURRENT_LIST_DIR}/Common/static_assert.h"
+)
 
 set(QwertycoinFramework_Common_LIBS
-    Boost::regex
     Threads::Threads
     QwertycoinFramework::Crypto
     QwertycoinFramework::Global
@@ -292,6 +290,8 @@ set(QwertycoinFramework_CryptoNoteCore_SOURCES
     "${CMAKE_CURRENT_LIST_DIR}/CryptoNoteCore/Currency.h"
     "${CMAKE_CURRENT_LIST_DIR}/CryptoNoteCore/Difficulty.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/CryptoNoteCore/Difficulty.h"
+    "${CMAKE_CURRENT_LIST_DIR}/CryptoNoteCore/Hardfork.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/CryptoNoteCore/Hardfork.h"
     "${CMAKE_CURRENT_LIST_DIR}/CryptoNoteCore/IBlock.h"
     "${CMAKE_CURRENT_LIST_DIR}/CryptoNoteCore/IBlockchainStorageObserver.h"
     "${CMAKE_CURRENT_LIST_DIR}/CryptoNoteCore/ICore.h"
@@ -322,11 +322,24 @@ set(QwertycoinFramework_CryptoNoteCore_SOURCES
     "${CMAKE_CURRENT_LIST_DIR}/CryptoNoteCore/TransactionUtils.h"
     "${CMAKE_CURRENT_LIST_DIR}/CryptoNoteCore/UpgradeDetector.h"
     "${CMAKE_CURRENT_LIST_DIR}/CryptoNoteCore/VerificationContext.h"
+    "${CMAKE_CURRENT_LIST_DIR}/CryptoNoteCore/LMDB/BinaryArchive.h"
+    "${CMAKE_CURRENT_LIST_DIR}/CryptoNoteCore/LMDB/BinaryArrayDataType.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/CryptoNoteCore/LMDB/BinaryArrayDataType.h"
+    "${CMAKE_CURRENT_LIST_DIR}/CryptoNoteCore/LMDB/BlockchainDB.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/CryptoNoteCore/LMDB/BlockchainDB.h"
+    "${CMAKE_CURRENT_LIST_DIR}/CryptoNoteCore/LMDB/DBTypes.h"
+    "${CMAKE_CURRENT_LIST_DIR}/CryptoNoteCore/LMDB/DatabaseLMDB.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/CryptoNoteCore/LMDB/DatabaseLMDB.h"
+    "${CMAKE_CURRENT_LIST_DIR}/CryptoNoteCore/LMDB/Structures.h"
+    "${CMAKE_CURRENT_LIST_DIR}/CryptoNoteCore/LMDB/TestLMDB.h"
 )
 
 set(QwertycoinFramework_CryptoNoteCore_LIBS
+    Boost::atomic
     Boost::filesystem
     Boost::program_options
+    Boost::thread
+    lmdb
     sparsehash::sparsehash
     QwertycoinFramework::BlockchainExplorer
     QwertycoinFramework::Common
@@ -368,6 +381,7 @@ set(QwertycoinFramework_Global_SOURCES
     "${CMAKE_CURRENT_LIST_DIR}/Global/Constants.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/Global/Constants.h"
     "${CMAKE_CURRENT_LIST_DIR}/Global/CryptoNoteConfig.h"
+    "${CMAKE_CURRENT_LIST_DIR}/Global/LMDBConfig.h"
 )
 
 add_library(QwertycoinFramework_Global STATIC ${QwertycoinFramework_Global_SOURCES})
@@ -488,12 +502,6 @@ set(QwertycoinFramework_NodeRpcProxy_LIBS
     QwertycoinFramework::System
 )
 
-if (BUILD_WITH_SSL)
-    list(APPEND QwertycoinFramework_NodeRpcProxy_LIBS
-            OpenSSL::SSL
-            OpenSSL::Crypto)
-endif()
-
 add_library(QwertycoinFramework_NodeRpcProxy STATIC ${QwertycoinFramework_NodeRpcProxy_SOURCES})
 add_library(QwertycoinFramework::NodeRpcProxy ALIAS QwertycoinFramework_NodeRpcProxy)
 target_include_directories(QwertycoinFramework_NodeRpcProxy PRIVATE ${QwertycoinFramework_INCLUDE_DIRS})
@@ -580,7 +588,6 @@ set(QwertycoinFramework_Rpc_SOURCES
     "${CMAKE_CURRENT_LIST_DIR}/Rpc/CoreRpcServerErrorCodes.h"
     "${CMAKE_CURRENT_LIST_DIR}/Rpc/HttpClient.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/Rpc/HttpClient.h"
-    "${CMAKE_CURRENT_LIST_DIR}/Rpc/HttpRootCerts.h"
     "${CMAKE_CURRENT_LIST_DIR}/Rpc/HttpServer.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/Rpc/HttpServer.h"
     "${CMAKE_CURRENT_LIST_DIR}/Rpc/JsonRpc.cpp"
@@ -589,14 +596,9 @@ set(QwertycoinFramework_Rpc_SOURCES
     "${CMAKE_CURRENT_LIST_DIR}/Rpc/RpcServer.h"
     "${CMAKE_CURRENT_LIST_DIR}/Rpc/RpcServerConfig.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/Rpc/RpcServerConfig.h"
-    )
+)
 
 set(QwertycoinFramework_Rpc_LIBS
-    Boost::atomic
-    Boost::filesystem
-    Boost::regex
-    Boost::system
-    Boost::thread
     QwertycoinFramework::BlockchainExplorer
     QwertycoinFramework::CryptoNoteCore
     QwertycoinFramework::Global
@@ -639,6 +641,10 @@ set(QwertycoinFramework_Serialization_SOURCES
     "${CMAKE_CURRENT_LIST_DIR}/Serialization/SerializationOverloads.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/Serialization/SerializationOverloads.h"
     "${CMAKE_CURRENT_LIST_DIR}/Serialization/SerializationTools.h"
+    "${CMAKE_CURRENT_LIST_DIR}/Serialization/Boost/BoostSerializationHelper.h"
+    "${CMAKE_CURRENT_LIST_DIR}/Serialization/Boost/CryptoNoteBoostSerialization.h"
+    "${CMAKE_CURRENT_LIST_DIR}/Serialization/Boost/portable_binary_iarchive.h"
+    "${CMAKE_CURRENT_LIST_DIR}/Serialization/Boost/portable_binary_oarchive.h"
 )
 
 add_library(QwertycoinFramework_Serialization STATIC ${QwertycoinFramework_Serialization_SOURCES})
@@ -665,8 +671,6 @@ set(QwertycoinFramework_System_SOURCES
     "${CMAKE_CURRENT_LIST_DIR}/System/RemoteContext.h"
     "${CMAKE_CURRENT_LIST_DIR}/System/RemoteEventLock.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/System/RemoteEventLock.h"
-    "${CMAKE_CURRENT_LIST_DIR}/System/SocketStream.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/System/SocketStream.h"
     "${CMAKE_CURRENT_LIST_DIR}/System/TcpStream.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/System/TcpStream.h"
 )

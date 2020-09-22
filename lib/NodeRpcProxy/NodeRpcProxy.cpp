@@ -57,27 +57,22 @@ std::error_code interpretResponseStatus(const std::string &status)
     } else if (CORE_RPC_STATUS_OK != status) {
         return make_error_code(error::INTERNAL_NODE_ERROR);
     } else {
-        return std::error_code {};
+        return std::error_code{};
     }
 }
 
 } // namespace
 
-NodeRpcProxy::NodeRpcProxy(const std::string &nodeHost, unsigned short nodePort,
-                           const std::string &daemonPath, const bool &daemonSSL)
+NodeRpcProxy::NodeRpcProxy(const std::string &nodeHost, unsigned short nodePort)
     : m_rpcTimeout(10000),
       m_pullInterval(5000),
       m_nodeHost(nodeHost),
       m_nodePort(nodePort),
-      m_daemonPath(daemonPath),
       m_connected(true),
-      m_daemonSSL(daemonSSL),
-      m_daemon_cert(""),
-      m_daemon_no_verify(false),
       m_peerCount(0),
       m_networkHeight(0),
-      m_nodeHeight(0),
-      m_minimalFee(CryptoNote::parameters::MAXIMUM_FEE)
+	  m_nodeHeight(0),
+	  m_minimalFee(CryptoNote::parameters::MAXIMUM_FEE)
 {
     resetInternalState();
 }
@@ -102,7 +97,9 @@ void NodeRpcProxy::init(const INode::Callback &callback)
 
     m_state = STATE_INITIALIZING;
     resetInternalState();
-    m_workerThread = std::thread([this, callback] { workerThread(callback); });
+    m_workerThread = std::thread([this, callback] {
+        workerThread(callback);
+    });
 }
 
 bool NodeRpcProxy::shutdown()
@@ -138,18 +135,6 @@ bool NodeRpcProxy::shutdown()
     return true;
 }
 
-void NodeRpcProxy::setRootCert(const std::string &path)
-{
-    if (m_daemon_cert.empty())
-        m_daemon_cert = path;
-}
-
-void NodeRpcProxy::disableVerify()
-{
-    if (!m_daemon_no_verify)
-        m_daemon_no_verify = true;
-}
-
 void NodeRpcProxy::resetInternalState()
 {
     m_stop = false;
@@ -177,12 +162,8 @@ void NodeRpcProxy::workerThread(const INode::Callback &initialized_callback)
         m_dispatcher = &dispatcher;
         ContextGroup contextGroup(dispatcher);
         m_context_group = &contextGroup;
-        HttpClient httpClient(dispatcher, m_nodeHost, m_nodePort, m_daemonSSL);
+        HttpClient httpClient(dispatcher, m_nodeHost, m_nodePort);
         m_httpClient = &httpClient;
-        if (!m_daemon_cert.empty())
-            m_httpClient->setRootCert(m_daemon_cert);
-        if (m_daemon_no_verify)
-            m_httpClient->disableVerify();
         Event httpEvent(dispatcher);
         m_httpEvent = &httpEvent;
         m_httpEvent->set();
@@ -241,8 +222,11 @@ bool NodeRpcProxy::updatePoolStatus()
     std::vector<std::unique_ptr<ITransactionReader>> addedTxs;
     std::vector<Crypto::Hash> deletedTxsIds;
 
-    std::error_code ec = doGetPoolSymmetricDifference(std::move(knownTxs), tailBlock, isBcActual,
-                                                      addedTxs, deletedTxsIds);
+    std::error_code ec = doGetPoolSymmetricDifference(std::move(knownTxs),
+                                                      tailBlock,
+                                                      isBcActual,
+                                                      addedTxs,
+                                                      deletedTxsIds);
     if (ec) {
         return true;
     }
@@ -298,13 +282,13 @@ void NodeRpcProxy::updateBlockchainStatus()
     CryptoNote::COMMAND_RPC_GET_INFO::request getInfoReq = AUTO_VAL_INIT(getInfoReq);
     CryptoNote::COMMAND_RPC_GET_INFO::response getInfoResp = AUTO_VAL_INIT(getInfoResp);
 
-    ec = jsonCommand("getinfo", getInfoReq, getInfoResp);
+    ec = jsonCommand("/getinfo", getInfoReq, getInfoResp);
     if (!ec) {
         // A quirk to let wallets work with previous versions daemons. Previous daemons didn't
         // have the 'last_known_block_index' parameter in RPC so it may have zero value.
         std::unique_lock<std::mutex> lock(m_mutex);
-        auto lastKnownBlockIndex =
-                std::max(getInfoResp.last_known_block_index, lastLocalBlockHeaderInfo.index);
+        auto lastKnownBlockIndex = std::max(getInfoResp.last_known_block_index,
+                                            lastLocalBlockHeaderInfo.index);
         lock.unlock();
         if (m_networkHeight.load(std::memory_order_relaxed) != lastKnownBlockIndex) {
             m_networkHeight.store(lastKnownBlockIndex, std::memory_order_relaxed);
@@ -339,11 +323,11 @@ void NodeRpcProxy::updatePeerCount(size_t peerCount)
 void NodeRpcProxy::updatePoolState(const std::vector<std::unique_ptr<ITransactionReader>> &addedTxs,
                                    const std::vector<Crypto::Hash> &deletedTxsIds)
 {
-    for (const auto &hash : deletedTxsIds) {
+    for (const auto& hash : deletedTxsIds) {
         m_knownTxs.erase(hash);
     }
 
-    for (const auto &tx : addedTxs) {
+    for (const auto& tx : addedTxs) {
         Hash hash = tx->getTransactionHash();
         m_knownTxs.emplace(std::move(hash));
     }
@@ -445,9 +429,10 @@ void NodeRpcProxy::relayTransaction(const CryptoNote::Transaction &transaction,
 }
 
 void NodeRpcProxy::getRandomOutsByAmounts(
-        std::vector<uint64_t> &&amounts, uint64_t outsCount,
-        std::vector<COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::outs_for_amount> &outs,
-        const Callback &callback)
+    std::vector<uint64_t> &&amounts,
+    uint64_t outsCount,
+    std::vector<COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::outs_for_amount> &outs,
+    const Callback &callback)
 {
     std::lock_guard<std::mutex> lock(m_mutex);
     if (m_state != STATE_INITIALIZED) {
@@ -455,14 +440,21 @@ void NodeRpcProxy::getRandomOutsByAmounts(
         return;
     }
 
-    scheduleRequest(std::bind(&NodeRpcProxy::doGetRandomOutsByAmounts, this, std::move(amounts),
-                              outsCount, std::ref(outs)),
-                    callback);
+    scheduleRequest(
+        std::bind(
+            &NodeRpcProxy::doGetRandomOutsByAmounts,
+            this,
+            std::move(amounts),
+            outsCount,
+            std::ref(outs)
+        ),
+        callback);
 }
 
 void NodeRpcProxy::getNewBlocks(std::vector<Crypto::Hash> &&knownBlockIds,
                                 std::vector<CryptoNote::block_complete_entry> &newBlocks,
-                                uint32_t &startHeight, const Callback &callback)
+                                uint32_t &startHeight,
+                                const Callback &callback)
 {
     std::lock_guard<std::mutex> lock(m_mutex);
     if (m_state != STATE_INITIALIZED) {
@@ -470,9 +462,15 @@ void NodeRpcProxy::getNewBlocks(std::vector<Crypto::Hash> &&knownBlockIds,
         return;
     }
 
-    scheduleRequest(std::bind(&NodeRpcProxy::doGetNewBlocks, this, std::move(knownBlockIds),
-                              std::ref(newBlocks), std::ref(startHeight)),
-                    callback);
+    scheduleRequest(
+        std::bind(
+            &NodeRpcProxy::doGetNewBlocks,
+            this,
+            std::move(knownBlockIds),
+            std::ref(newBlocks),
+            std::ref(startHeight)
+        ),
+        callback);
 }
 
 void NodeRpcProxy::getTransactionOutsGlobalIndices(const Crypto::Hash &transactionHash,
@@ -485,13 +483,20 @@ void NodeRpcProxy::getTransactionOutsGlobalIndices(const Crypto::Hash &transacti
         return;
     }
 
-    scheduleRequest(std::bind(&NodeRpcProxy::doGetTransactionOutsGlobalIndices, this,
-                              transactionHash, std::ref(outsGlobalIndices)),
-                    callback);
+    scheduleRequest(
+        std::bind(
+            &NodeRpcProxy::doGetTransactionOutsGlobalIndices,
+            this,
+            transactionHash,
+            std::ref(outsGlobalIndices)
+        ),
+        callback);
 }
 
-void NodeRpcProxy::queryBlocks(std::vector<Crypto::Hash> &&knownBlockIds, uint64_t timestamp,
-                               std::vector<BlockShortEntry> &newBlocks, uint32_t &startHeight,
+void NodeRpcProxy::queryBlocks(std::vector<Crypto::Hash> &&knownBlockIds,
+                               uint64_t timestamp,
+                               std::vector<BlockShortEntry> &newBlocks,
+                               uint32_t &startHeight,
                                const Callback &callback)
 {
     std::lock_guard<std::mutex> lock(m_mutex);
@@ -500,15 +505,25 @@ void NodeRpcProxy::queryBlocks(std::vector<Crypto::Hash> &&knownBlockIds, uint64
         return;
     }
 
-    scheduleRequest(std::bind(&NodeRpcProxy::doQueryBlocksLite, this, std::move(knownBlockIds),
-                              timestamp, std::ref(newBlocks), std::ref(startHeight)),
-                    callback);
+    scheduleRequest(
+        std::bind(
+            &NodeRpcProxy::doQueryBlocksLite,
+            this,
+            std::move(knownBlockIds),
+            timestamp,
+            std::ref(newBlocks),
+            std::ref(startHeight)
+        ),
+        callback);
 }
 
 void NodeRpcProxy::getPoolSymmetricDifference(
-        std::vector<Crypto::Hash> &&knownPoolTxIds, Crypto::Hash knownBlockId, bool &isBcActual,
-        std::vector<std::unique_ptr<ITransactionReader>> &newTxs,
-        std::vector<Crypto::Hash> &deletedTxIds, const Callback &callback)
+    std::vector<Crypto::Hash> &&knownPoolTxIds,
+    Crypto::Hash knownBlockId,
+    bool &isBcActual,
+    std::vector<std::unique_ptr<ITransactionReader>> &newTxs,
+    std::vector<Crypto::Hash> &deletedTxIds,
+    const Callback &callback)
 {
     std::lock_guard<std::mutex> lock(m_mutex);
     if (m_state != STATE_INITIALIZED) {
@@ -516,16 +531,23 @@ void NodeRpcProxy::getPoolSymmetricDifference(
         return;
     }
 
-    scheduleRequest(
-            [this, knownPoolTxIds, knownBlockId, &isBcActual, &newTxs,
-             &deletedTxIds]() mutable -> std::error_code {
-                return this->doGetPoolSymmetricDifference(std::move(knownPoolTxIds), knownBlockId,
-                                                          isBcActual, newTxs, deletedTxIds);
-            },
-            callback);
+    scheduleRequest([
+        this,
+        knownPoolTxIds,
+        knownBlockId,
+        &isBcActual,
+        &newTxs,
+        &deletedTxIds] () mutable -> std::error_code {
+        return this->doGetPoolSymmetricDifference(std::move(knownPoolTxIds),
+                                                  knownBlockId,
+                                                  isBcActual,
+                                                  newTxs,
+                                                  deletedTxIds);
+    }, callback);
 }
 
-void NodeRpcProxy::getMultisignatureOutputByGlobalIndex(uint64_t amount, uint32_t gindex,
+void NodeRpcProxy::getMultisignatureOutputByGlobalIndex(uint64_t amount,
+                                                        uint32_t gindex,
                                                         MultisignatureOutput &out,
                                                         const Callback &callback)
 {
@@ -536,7 +558,7 @@ void NodeRpcProxy::getMultisignatureOutputByGlobalIndex(uint64_t amount, uint32_
     }
 
     // TODO: NOT IMPLEMENTED!
-    callback(std::error_code {});
+    callback(std::error_code{});
 }
 
 void NodeRpcProxy::getBlocks(const std::vector<uint32_t> &blockHeights,
@@ -550,12 +572,15 @@ void NodeRpcProxy::getBlocks(const std::vector<uint32_t> &blockHeights,
     }
 
     // TODO: NOT IMPLEMENTED!
-    callback(std::error_code {});
+    callback(std::error_code{});
 }
 
-void NodeRpcProxy::getBlocks(uint64_t timestampBegin, uint64_t timestampEnd,
-                             uint32_t blocksNumberLimit, std::vector<BlockDetails> &blocks,
-                             uint32_t &blocksNumberWithinTimestamps, const Callback &callback)
+void NodeRpcProxy::getBlocks(uint64_t timestampBegin,
+                             uint64_t timestampEnd,
+                             uint32_t blocksNumberLimit,
+                             std::vector<BlockDetails> &blocks,
+                             uint32_t &blocksNumberWithinTimestamps,
+                             const Callback &callback)
 {
     std::lock_guard<std::mutex> lock(m_mutex);
     if (m_state != STATE_INITIALIZED) {
@@ -564,11 +589,12 @@ void NodeRpcProxy::getBlocks(uint64_t timestampBegin, uint64_t timestampEnd,
     }
 
     // TODO: NOT IMPLEMENTED!
-    callback(std::error_code {});
+    callback(std::error_code{});
 }
 
 void NodeRpcProxy::getBlocks(const std::vector<Crypto::Hash> &blockHashes,
-                             std::vector<BlockDetails> &blocks, const Callback &callback)
+                             std::vector<BlockDetails> &blocks,
+                             const Callback &callback)
 {
     std::lock_guard<std::mutex> lock(m_mutex);
     if (m_state != STATE_INITIALIZED) {
@@ -577,7 +603,7 @@ void NodeRpcProxy::getBlocks(const std::vector<Crypto::Hash> &blockHashes,
     }
 
     // TODO: NOT IMPLEMENTED!
-    callback(std::error_code {});
+    callback(std::error_code{});
 }
 
 void NodeRpcProxy::getTransactions(const std::vector<Crypto::Hash> &transactionHashes,
@@ -591,10 +617,11 @@ void NodeRpcProxy::getTransactions(const std::vector<Crypto::Hash> &transactionH
     }
 
     // TODO: NOT IMPLEMENTED!
-    callback(std::error_code {});
+    callback(std::error_code{});
 }
 
-void NodeRpcProxy::getPoolTransactions(uint64_t timestampBegin, uint64_t timestampEnd,
+void NodeRpcProxy::getPoolTransactions(uint64_t timestampBegin,
+                                       uint64_t timestampEnd,
                                        uint32_t transactionsNumberLimit,
                                        std::vector<TransactionDetails> &transactions,
                                        uint64_t &transactionsNumberWithinTimestamps,
@@ -607,7 +634,7 @@ void NodeRpcProxy::getPoolTransactions(uint64_t timestampBegin, uint64_t timesta
     }
 
     // TODO: NOT IMPLEMENTED!
-    callback(std::error_code {});
+    callback(std::error_code{});
 }
 
 void NodeRpcProxy::getTransactionsByPaymentId(const Crypto::Hash &paymentId,
@@ -621,7 +648,7 @@ void NodeRpcProxy::getTransactionsByPaymentId(const Crypto::Hash &paymentId,
     }
 
     // TODO: NOT IMPLEMENTED!
-    callback(std::error_code {});
+    callback(std::error_code{});
 }
 
 void NodeRpcProxy::isSynchronized(bool &syncStatus, const Callback &callback)
@@ -634,7 +661,7 @@ void NodeRpcProxy::isSynchronized(bool &syncStatus, const Callback &callback)
     }
 
     syncStatus = (lastLocalBlockHeaderInfo.index == m_networkHeight);
-    callback(std::error_code {});
+    callback(std::error_code{});
 }
 
 std::error_code NodeRpcProxy::doRelayTransaction(const CryptoNote::Transaction &transaction)
@@ -644,12 +671,13 @@ std::error_code NodeRpcProxy::doRelayTransaction(const CryptoNote::Transaction &
 
     req.tx_as_hex = toHex(toBinaryArray(transaction));
 
-    return jsonCommand("sendrawtransaction", req, rsp);
+    return jsonCommand("/sendrawtransaction", req, rsp);
 }
 
 std::error_code NodeRpcProxy::doGetRandomOutsByAmounts(
-        std::vector<uint64_t> &amounts, uint64_t outsCount,
-        std::vector<COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::outs_for_amount> &outs)
+    std::vector<uint64_t> &amounts,
+    uint64_t outsCount,
+    std::vector<COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::outs_for_amount> &outs)
 {
     COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::request req = AUTO_VAL_INIT(req);
     COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::response rsp = AUTO_VAL_INIT(rsp);
@@ -657,7 +685,7 @@ std::error_code NodeRpcProxy::doGetRandomOutsByAmounts(
     req.amounts = std::move(amounts);
     req.outs_count = outsCount;
 
-    std::error_code ec = binaryCommand("getrandom_outs.bin", req, rsp);
+    std::error_code ec = binaryCommand("/getrandom_outs.bin", req, rsp);
     if (!ec) {
         outs = std::move(rsp.outs);
     }
@@ -665,17 +693,17 @@ std::error_code NodeRpcProxy::doGetRandomOutsByAmounts(
     return ec;
 }
 
-std::error_code
-NodeRpcProxy::doGetNewBlocks(std::vector<Crypto::Hash> &knownBlockIds,
-                             std::vector<CryptoNote::block_complete_entry> &newBlocks,
-                             uint32_t &startHeight)
+std::error_code NodeRpcProxy::doGetNewBlocks(
+    std::vector<Crypto::Hash> &knownBlockIds,
+    std::vector<CryptoNote::block_complete_entry> &newBlocks,
+    uint32_t &startHeight)
 {
     CryptoNote::COMMAND_RPC_GET_BLOCKS_FAST::request req = AUTO_VAL_INIT(req);
     CryptoNote::COMMAND_RPC_GET_BLOCKS_FAST::response rsp = AUTO_VAL_INIT(rsp);
 
     req.block_ids = std::move(knownBlockIds);
 
-    std::error_code ec = binaryCommand("getblocks.bin", req, rsp);
+    std::error_code ec = binaryCommand("/getblocks.bin", req, rsp);
     if (!ec) {
         newBlocks = std::move(rsp.blocks);
         startHeight = static_cast<uint32_t>(rsp.start_height);
@@ -684,16 +712,16 @@ NodeRpcProxy::doGetNewBlocks(std::vector<Crypto::Hash> &knownBlockIds,
     return ec;
 }
 
-std::error_code
-NodeRpcProxy::doGetTransactionOutsGlobalIndices(const Crypto::Hash &transactionHash,
-                                                std::vector<uint32_t> &outsGlobalIndices)
+std::error_code NodeRpcProxy::doGetTransactionOutsGlobalIndices(
+    const Crypto::Hash &transactionHash,
+    std::vector<uint32_t> &outsGlobalIndices)
 {
     CryptoNote::COMMAND_RPC_GET_TX_GLOBAL_OUTPUTS_INDEXES::request req = AUTO_VAL_INIT(req);
     CryptoNote::COMMAND_RPC_GET_TX_GLOBAL_OUTPUTS_INDEXES::response rsp = AUTO_VAL_INIT(rsp);
 
     req.txid = transactionHash;
 
-    std::error_code ec = binaryCommand("get_o_indexes.bin", req, rsp);
+    std::error_code ec = binaryCommand("/get_o_indexes.bin", req, rsp);
     if (!ec) {
         outsGlobalIndices.clear();
         for (auto idx : rsp.o_indexes) {
@@ -715,14 +743,14 @@ std::error_code NodeRpcProxy::doQueryBlocksLite(const std::vector<Crypto::Hash> 
     req.blockIds = knownBlockIds;
     req.timestamp = timestamp;
 
-    std::error_code ec = binaryCommand("queryblockslite.bin", req, rsp);
+    std::error_code ec = binaryCommand("/queryblockslite.bin", req, rsp);
     if (ec) {
         return ec;
     }
 
     startHeight = static_cast<uint32_t>(rsp.startHeight);
 
-    for (auto &item : rsp.items) {
+    for (auto &item: rsp.items) {
         BlockShortEntry bse;
         bse.hasBlock = false;
 
@@ -735,7 +763,7 @@ std::error_code NodeRpcProxy::doQueryBlocksLite(const std::vector<Crypto::Hash> 
             bse.hasBlock = true;
         }
 
-        for (const auto &txp : item.txPrefixes) {
+        for (const auto &txp: item.txPrefixes) {
             TransactionShortInfo tsi;
             tsi.txId = txp.txHash;
             tsi.txPrefix = txp.txPrefix;
@@ -745,14 +773,15 @@ std::error_code NodeRpcProxy::doQueryBlocksLite(const std::vector<Crypto::Hash> 
         newBlocks.push_back(std::move(bse));
     }
 
-    return std::error_code {};
+    return std::error_code{};
 }
 
-std::error_code
-NodeRpcProxy::doGetPoolSymmetricDifference(std::vector<Crypto::Hash> &&knownPoolTxIds,
-                                           Crypto::Hash knownBlockId, bool &isBcActual,
-                                           std::vector<std::unique_ptr<ITransactionReader>> &newTxs,
-                                           std::vector<Crypto::Hash> &deletedTxIds)
+std::error_code NodeRpcProxy::doGetPoolSymmetricDifference(
+    std::vector<Crypto::Hash> &&knownPoolTxIds,
+    Crypto::Hash knownBlockId,
+    bool &isBcActual,
+    std::vector<std::unique_ptr<ITransactionReader>> &newTxs,
+    std::vector<Crypto::Hash> &deletedTxIds)
 {
     CryptoNote::COMMAND_RPC_GET_POOL_CHANGES_LITE::request req = AUTO_VAL_INIT(req);
     CryptoNote::COMMAND_RPC_GET_POOL_CHANGES_LITE::response rsp = AUTO_VAL_INIT(rsp);
@@ -760,7 +789,7 @@ NodeRpcProxy::doGetPoolSymmetricDifference(std::vector<Crypto::Hash> &&knownPool
     req.tailBlockId = knownBlockId;
     req.knownTxsIds = knownPoolTxIds;
 
-    std::error_code ec = binaryCommand("get_pool_changes_lite.bin", req, rsp);
+    std::error_code ec = binaryCommand("/get_pool_changes_lite.bin", req, rsp);
 
     if (ec) {
         return ec;
@@ -785,7 +814,8 @@ void NodeRpcProxy::scheduleRequest(std::function<std::error_code()> &&procedure,
     {
     public:
         Wrapper(std::function<void(std::function<std::error_code()> &, Callback &)> &&_func,
-                std::function<std::error_code()> &&_procedure, const Callback &_callback)
+                std::function<std::error_code()> &&_procedure,
+                const Callback &_callback)
             : func(std::move(_func)),
               procedure(std::move(_procedure)),
               callback(std::move(_callback))
@@ -793,7 +823,9 @@ void NodeRpcProxy::scheduleRequest(std::function<std::error_code()> &&procedure,
         }
 
         Wrapper(const Wrapper &other)
-            : func(other.func), procedure(other.procedure), callback(other.callback)
+            : func(other.func),
+              procedure(other.procedure),
+              callback(other.callback)
         {
         }
 
@@ -804,52 +836,48 @@ void NodeRpcProxy::scheduleRequest(std::function<std::error_code()> &&procedure,
         {
         }
 
-        void operator()() { func(procedure, callback); }
-
+        void operator()()
+        {
+            func(procedure, callback);
+        }
     private:
-        std::function<void(std::function<std::error_code()> &, Callback &)> func;
+        std::function<void(std::function<std::error_code()>&, Callback&)> func;
         std::function<std::error_code()> procedure;
         Callback callback;
     };
 
     assert(m_dispatcher != nullptr && m_context_group != nullptr);
 
-    m_dispatcher->remoteSpawn(Wrapper(
-            [this](std::function<std::error_code()> &procedure, Callback &callback) {
-                m_context_group->spawn(Wrapper(
-                        [this](std::function<std::error_code()> &procedure,
-                               const Callback &callback) {
-                            if (m_stop) {
-                                callback(std::make_error_code(std::errc::operation_canceled));
-                            } else {
-                                std::error_code ec = procedure();
-                                if (m_connected != m_httpClient->isConnected()) {
-                                    m_connected = m_httpClient->isConnected();
-                                    m_rpcProxyObserverManager.notify(
-                                            &INodeRpcProxyObserver::connectionStatusUpdated,
-                                            m_connected);
-                                }
-                                callback(
-                                        m_stop ? std::make_error_code(std::errc::operation_canceled)
-                                               : ec);
-                            }
-                        },
-                        std::move(procedure), std::move(callback)));
-            },
-            std::move(procedure), callback));
+    m_dispatcher->remoteSpawn(Wrapper([this](std::function<std::error_code()> &procedure,
+                                             Callback &callback) {
+        m_context_group->spawn(Wrapper([this](std::function<std::error_code()> &procedure,
+                                              const Callback &callback) {
+            if (m_stop) {
+                callback(std::make_error_code(std::errc::operation_canceled));
+            } else {
+                std::error_code ec = procedure();
+                if (m_connected != m_httpClient->isConnected()) {
+                    m_connected = m_httpClient->isConnected();
+                    m_rpcProxyObserverManager.notify(
+                        &INodeRpcProxyObserver::connectionStatusUpdated,
+                        m_connected);
+                }
+                callback(m_stop ? std::make_error_code(std::errc::operation_canceled) : ec);
+            }
+        }, std::move(procedure), std::move(callback)));
+    }, std::move(procedure), callback));
 }
 
-template<typename Request, typename Response>
-std::error_code NodeRpcProxy::binaryCommand(const std::string &comm, const Request &req,
+template <typename Request, typename Response>
+std::error_code NodeRpcProxy::binaryCommand(const std::string &url,
+                                            const Request &req,
                                             Response &res)
 {
     std::error_code ec;
 
-    std::string rpc_url = this->m_daemonPath + comm;
-
     try {
         EventLock eventLock(*m_httpEvent);
-        invokeBinaryCommand(*m_httpClient, rpc_url, req, res);
+        invokeBinaryCommand(*m_httpClient, url, req, res);
         ec = interpretResponseStatus(res.status);
     } catch (const ConnectException &) {
         ec = make_error_code(error::CONNECT_ERROR);
@@ -860,16 +888,14 @@ std::error_code NodeRpcProxy::binaryCommand(const std::string &comm, const Reque
     return ec;
 }
 
-template<typename Request, typename Response>
-std::error_code NodeRpcProxy::jsonCommand(const std::string &comm, const Request &req, Response &res)
+template <typename Request, typename Response>
+std::error_code NodeRpcProxy::jsonCommand(const std::string &url, const Request &req, Response &res)
 {
     std::error_code ec;
 
-    std::string rpc_url = this->m_daemonPath + comm;
-
     try {
         EventLock eventLock(*m_httpEvent);
-        invokeJsonCommand(*m_httpClient, rpc_url, req, res);
+        invokeJsonCommand(*m_httpClient, url, req, res);
         ec = interpretResponseStatus(res.status);
     } catch (const ConnectException &) {
         ec = make_error_code(error::CONNECT_ERROR);
@@ -880,8 +906,9 @@ std::error_code NodeRpcProxy::jsonCommand(const std::string &comm, const Request
     return ec;
 }
 
-template<typename Request, typename Response>
-std::error_code NodeRpcProxy::jsonRpcCommand(const std::string &method, const Request &req,
+template <typename Request, typename Response>
+std::error_code NodeRpcProxy::jsonRpcCommand(const std::string &method,
+                                             const Request &req,
                                              Response &res)
 {
     std::error_code ec = make_error_code(error::INTERNAL_NODE_ERROR);
@@ -897,10 +924,8 @@ std::error_code NodeRpcProxy::jsonRpcCommand(const std::string &method, const Re
         HttpRequest httpReq;
         HttpResponse httpRes;
 
-        std::string rpc_url = this->m_daemonPath + "json_rpc";
-
         httpReq.addHeader("Content-Type", "application/json");
-        httpReq.setUrl(rpc_url);
+        httpReq.setUrl("/json_rpc");
         httpReq.setBody(jsReq.getBody());
 
         m_httpClient->request(httpReq, httpRes);

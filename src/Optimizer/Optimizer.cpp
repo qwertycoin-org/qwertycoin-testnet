@@ -48,48 +48,22 @@ using namespace Qwertycoin;
 const uint64_t DEFAULT_THRESHOLD = UINT64_C(100000000000000);
 
 namespace {
-const command_line::arg_descriptor<std::string> arg_address = {
-    "address",
-    "Address of the wallet to optimize inputs. If not provided, all addresses will be checked and, "
-    "if applicable, optimized using polling interval between each interaction. Default: All",
-    "", true
-};
-const command_line::arg_descriptor<std::string> arg_ip = {
-    "walletd-ip", "IP address of walletd. Default: 127.0.0.1", "127.0.0.1"
-};
-const command_line::arg_descriptor<uint16_t> arg_rpc_port = { "walletd-port",
-                                                              "RPC port of walletd. Default: 8070",
-                                                              8070 };
-const command_line::arg_descriptor<std::string> arg_user = { "walletd-user",
-                                                             "RPC user. Default: none", "", true };
-const command_line::arg_descriptor<std::string> arg_pass = { "walletd-password",
-                                                             "RPC password. Default: none", "",
-                                                             true };
-const command_line::arg_descriptor<uint16_t> arg_interval = {
-    "interval", "polling interval in seconds. Default: 5. Minimum: 1. Maximum: 120.", 5, true
-};
-const command_line::arg_descriptor<uint16_t> arg_duration = {
-    "duration", "maximum execution time, in minutes. Default: 0 (unlimited)", 0, true
-};
-const command_line::arg_descriptor<uint64_t> arg_threshold = {
-    "threshold",
-    "Only outputs lesser than the threshold value will be included into optimization. Default: "
-    "100000000000000 (do not use decimal point)",
-    DEFAULT_THRESHOLD, true
-};
-const command_line::arg_descriptor<uint16_t> arg_anonimity = {
-    "anonymity",
-    "Privacy level. Higher values give more privacy but bigger transactions. Default: 3", 3, true
-};
-const command_line::arg_descriptor<bool> arg_preview = {
-    "preview", "print on screen what it would be doing, but not really doing it", false, true
-};
-Logging::ConsoleLogger log;
-Logging::LoggerRef logger(log, "optimizer");
-System::Dispatcher dispatcher;
+    const command_line::arg_descriptor<std::string> arg_address   = {"address", "Address of the wallet to optimize inputs. If not provided, all addresses will be checked and, if applicable, optimized using polling interval between each interaction. Default: All", "", true};
+    const command_line::arg_descriptor<std::string> arg_ip        = {"walletd-ip", "IP address of walletd. Default: 127.0.0.1", "127.0.0.1"};
+    const command_line::arg_descriptor<uint16_t>    arg_rpc_port  = {"walletd-port", "RPC port of walletd. Default: 8070", 8070};
+    const command_line::arg_descriptor<std::string> arg_user      = {"walletd-user", "RPC user. Default: none", "", true};
+    const command_line::arg_descriptor<std::string> arg_pass      = {"walletd-password", "RPC password. Default: none", "", true};
+    const command_line::arg_descriptor<uint16_t>    arg_interval  = {"interval", "polling interval in seconds. Default: 5. Minimum: 1. Maximum: 120.", 5, true};
+    const command_line::arg_descriptor<uint16_t>    arg_duration  = {"duration", "maximum execution time, in minutes. Default: 0 (unlimited)", 0, true};
+    const command_line::arg_descriptor<uint64_t>    arg_threshold = {"threshold", "Only outputs lesser than the threshold value will be included into optimization. Default: 100000000000000 (do not use decimal point)", DEFAULT_THRESHOLD, true};
+    const command_line::arg_descriptor<uint16_t>    arg_anonimity = {"anonymity", "Privacy level. Higher values give more privacy but bigger transactions. Default: 3", 3, true};
+    const command_line::arg_descriptor<bool>        arg_preview   = {"preview", "print on screen what it would be doing, but not really doing it", false, true};
+    Logging::ConsoleLogger log;
+    Logging::LoggerRef logger(log, "optimizer");
+    System::Dispatcher dispatcher;
 }
 
-bool validAddress(po::variables_map &vm, const std::string &address)
+bool validAddress(po::variables_map& vm, const std::string& address)
 {
     PaymentService::GetBalance::Request req;
     PaymentService::GetBalance::Response res;
@@ -97,26 +71,32 @@ bool validAddress(po::variables_map &vm, const std::string &address)
     req.address = address;
 
     try {
-        HttpClient httpClient(dispatcher, command_line::get_arg(vm, arg_ip),
-                              command_line::get_arg(vm, arg_rpc_port), false);
+        HttpClient httpClient(dispatcher, command_line::get_arg(vm, arg_ip), command_line::get_arg(vm, arg_rpc_port));
         if (command_line::has_arg(vm, arg_user) && command_line::has_arg(vm, arg_pass)) {
-            JsonRpc::invokeJsonRpcCommand(httpClient, "getBalance", req, res,
-                                          command_line::get_arg(vm, arg_user),
-                                          command_line::get_arg(vm, arg_pass));
-        } else {
+            JsonRpc::invokeJsonRpcCommand(
+                httpClient,
+                "getBalance",
+                req,
+                res,
+                command_line::get_arg(vm, arg_user),
+                command_line::get_arg(vm, arg_pass));
+        }
+        else {
             JsonRpc::invokeJsonRpcCommand(httpClient, "getBalance", req, res);
         }
-    } catch (const std::exception &e) {
-        logger(ERROR, RED) << getProjectCLIHeader() << ENDL
-                           << "Failed to connect to walletd: " << e.what() << ENDL;
+    } catch (const std::exception& e) {
+        logger(ERROR, RED)
+            << getProjectCLIHeader() << ENDL
+            << "Failed to connect to walletd: "
+            << e.what()
+            << ENDL;
         return false;
     }
 
     return true;
 }
 
-std::vector<std::string> getWalletsAddresses(po::variables_map &vm)
-{
+std::vector<std::string> getWalletsAddresses(po::variables_map& vm) {
     std::vector<std::string> containerAddresses;
     if (command_line::has_arg(vm, arg_address)) {
         std::string address = command_line::get_arg(vm, arg_address);
@@ -128,18 +108,19 @@ std::vector<std::string> getWalletsAddresses(po::variables_map &vm)
         PaymentService::GetAddresses::Response res;
 
         try {
-            HttpClient httpClient(dispatcher, command_line::get_arg(vm, arg_ip),
-                                  command_line::get_arg(vm, arg_rpc_port), false);
+            HttpClient httpClient(dispatcher, command_line::get_arg(vm, arg_ip), command_line::get_arg(vm, arg_rpc_port));
             if (command_line::has_arg(vm, arg_user) && command_line::has_arg(vm, arg_pass)) {
-                JsonRpc::invokeJsonRpcCommand(httpClient, "getAddresses", req, res,
-                                              command_line::get_arg(vm, arg_user),
-                                              command_line::get_arg(vm, arg_pass));
-            } else {
-                JsonRpc::invokeJsonRpcCommand(httpClient, "getAddresses", req, res);
+                JsonRpc::invokeJsonRpcCommand(httpClient, "getAddresses", req, res, command_line::get_arg(vm, arg_user), command_line::get_arg(vm, arg_pass));
             }
-        } catch (const std::exception &e) {
-            logger(ERROR, RED) << getProjectCLIHeader() << ENDL
-                               << "Failed to connect to walletd: " << e.what() << ENDL;
+            else {
+            JsonRpc::invokeJsonRpcCommand(httpClient, "getAddresses", req, res);
+            }
+        } catch (const std::exception& e) {
+            logger(ERROR, RED)
+                << getProjectCLIHeader() << ENDL
+                << "Failed to connect to walletd: "
+                << e.what()
+                << ENDL;
         }
 
         containerAddresses = res.addresses;
@@ -147,7 +128,7 @@ std::vector<std::string> getWalletsAddresses(po::variables_map &vm)
     return containerAddresses;
 }
 
-bool isWalletEligible(po::variables_map &vm, std::string address)
+bool isWalletEligible(po::variables_map& vm, std::string address)
 {
     uint64_t threshold = DEFAULT_THRESHOLD;
 
@@ -162,18 +143,18 @@ bool isWalletEligible(po::variables_map &vm, std::string address)
     req.addresses.push_back(address);
 
     try {
-        HttpClient httpClient(dispatcher, command_line::get_arg(vm, arg_ip),
-                              command_line::get_arg(vm, arg_rpc_port), false);
+        HttpClient httpClient(dispatcher, command_line::get_arg(vm, arg_ip), command_line::get_arg(vm, arg_rpc_port));
         if (command_line::has_arg(vm, arg_user) && command_line::has_arg(vm, arg_pass)) {
-            JsonRpc::invokeJsonRpcCommand(httpClient, "estimateFusion", req, res,
-                                          command_line::get_arg(vm, arg_user),
-                                          command_line::get_arg(vm, arg_pass));
+            JsonRpc::invokeJsonRpcCommand(httpClient, "estimateFusion", req, res, command_line::get_arg(vm, arg_user), command_line::get_arg(vm, arg_pass));
         } else {
             JsonRpc::invokeJsonRpcCommand(httpClient, "estimateFusion", req, res);
         }
-    } catch (const std::exception &e) {
-        logger(ERROR, RED) << getProjectCLIHeader() << ENDL
-                           << "Failed to connect to walletd: " << e.what() << ENDL;
+    }
+    catch (const std::exception& e) {
+        logger(ERROR, RED)
+            << getProjectCLIHeader() << ENDL
+            << "Failed to connect to walletd: "
+            << e.what() << ENDL;
         return false;
     }
 
@@ -207,18 +188,17 @@ bool optimizeWallet(po::variables_map &vm, std::string address)
 
     try {
         logger(INFO, GREEN) << "Optimizing wallet  : " << address;
-        HttpClient httpClient(dispatcher, command_line::get_arg(vm, arg_ip),
-                              command_line::get_arg(vm, arg_rpc_port), false);
+        HttpClient httpClient(dispatcher, command_line::get_arg(vm, arg_ip), command_line::get_arg(vm, arg_rpc_port));
         if (command_line::has_arg(vm, arg_user) && command_line::has_arg(vm, arg_pass)) {
-            JsonRpc::invokeJsonRpcCommand(httpClient, "sendFusionTransaction", req, res,
-                                          command_line::get_arg(vm, arg_user),
-                                          command_line::get_arg(vm, arg_pass));
+            JsonRpc::invokeJsonRpcCommand(httpClient, "sendFusionTransaction", req, res, command_line::get_arg(vm, arg_user), command_line::get_arg(vm, arg_pass));
         } else {
             JsonRpc::invokeJsonRpcCommand(httpClient, "sendFusionTransaction", req, res);
         }
-    } catch (const std::exception &e) {
-        logger(ERROR, RED) << getProjectCLIHeader() << ENDL << "Failed in wallet: " << address
-                           << " due to: " << e.what() << ENDL;
+    } catch (const std::exception& e) {
+        logger(ERROR, RED)
+            << getProjectCLIHeader() << ENDL
+            << "Failed in wallet: " << address
+            << " due to: " << e.what() << ENDL;
         return false;
     }
 
@@ -226,19 +206,19 @@ bool optimizeWallet(po::variables_map &vm, std::string address)
     return true;
 }
 
-void processWallets(po::variables_map &vm, std::vector<std::string> &containerAddresses,
-                    int &optimized, int &notOptimized,
-                    const std::chrono::time_point<std::chrono::steady_clock> &start)
+void processWallets(po::variables_map &vm,
+    std::vector<std::string> &containerAddresses,
+    int &optimized,
+    int &notOptimized,
+    const std::chrono::time_point<std::chrono::steady_clock> &start)
 {
     uint16_t timeInterval = 5;
     int32_t maxDuration = 0;
 
     if (command_line::has_arg(vm, arg_interval)) {
         timeInterval = command_line::get_arg(vm, arg_interval);
-        if (timeInterval > 120)
-            timeInterval = 120;
-        if (timeInterval < 1)
-            timeInterval = 1;
+        if (timeInterval > 120) timeInterval = 120;
+        if (timeInterval < 1) timeInterval = 1;
     }
 
     if (command_line::has_arg(vm, arg_duration)) {
@@ -258,7 +238,7 @@ void processWallets(po::variables_map &vm, std::vector<std::string> &containerAd
     if (command_line::has_arg(vm, arg_preview)) {
         previewMode = true;
     }
-    for (const auto &address : containerAddresses) {
+    for (const auto& address : containerAddresses) {
         if (isWalletEligible(vm, address)) {
             if (previewMode) {
                 logger(INFO, GREEN) << "Optimizable wallet   : " << address << ENDL;
@@ -275,8 +255,8 @@ void processWallets(po::variables_map &vm, std::vector<std::string> &containerAd
                 }
             }
         } else {
-            // logger(INFO, GREEN) << "Wallet not eligible: " << address << ENDL;
-            notOptimized++;
+        //logger(INFO, GREEN) << "Wallet not eligible: " << address << ENDL;
+        notOptimized++;
         }
         count++;
         if (count % steps == 0) {
@@ -284,7 +264,7 @@ void processWallets(po::variables_map &vm, std::vector<std::string> &containerAd
         }
         if (maxDuration > 0) {
             auto dur = std::chrono::steady_clock::now() - start;
-            if (std::chrono::duration_cast<std::chrono::minutes>(dur).count() >= maxDuration) {
+            if(std::chrono::duration_cast<std::chrono::minutes>(dur).count() >= maxDuration) {
                 logger(INFO, GREEN) << "Maximum duration time reached." << ENDL;
                 break;
             }
@@ -299,18 +279,18 @@ bool canConnect(po::variables_map &vm)
     PaymentService::GetStatus::Response res;
 
     try {
-        HttpClient httpClient(dispatcher, command_line::get_arg(vm, arg_ip),
-                              command_line::get_arg(vm, arg_rpc_port), false);
+        HttpClient httpClient(dispatcher, command_line::get_arg(vm, arg_ip), command_line::get_arg(vm, arg_rpc_port));
         if (command_line::has_arg(vm, arg_user) && command_line::has_arg(vm, arg_pass)) {
-            JsonRpc::invokeJsonRpcCommand(httpClient, "getStatus", req, res,
-                                          command_line::get_arg(vm, arg_user),
-                                          command_line::get_arg(vm, arg_pass));
-        } else {
+            JsonRpc::invokeJsonRpcCommand(httpClient, "getStatus", req, res, command_line::get_arg(vm, arg_user), command_line::get_arg(vm, arg_pass));
+        }
+        else {
             JsonRpc::invokeJsonRpcCommand(httpClient, "getStatus", req, res);
         }
     } catch (const std::exception &e) {
-        logger(ERROR, RED) << getProjectCLIHeader() << ENDL
-                           << "Failed to connect to walletd: " << e.what() << ENDL;
+        logger(ERROR, RED)
+            << getProjectCLIHeader() << ENDL
+            << "Failed to connect to walletd: "
+            << e.what() << ENDL;
         return false;
     }
 
@@ -325,8 +305,7 @@ bool run_optimizer(po::variables_map &vm)
         if (command_line::has_arg(vm, arg_address)) {
             logger(INFO, YELLOW) << "Starting optimizing." << ENDL;
         } else {
-            logger(INFO, YELLOW) << "Starting optimizing. There are " << addresses.size()
-                                 << " wallets in this container." << ENDL;
+            logger(INFO, YELLOW) << "Starting optimizing. There are " << addresses.size() << " wallets in this container." << ENDL;
         }
         int optimized = 0;
         int notOptimized = 0;
@@ -336,19 +315,18 @@ bool run_optimizer(po::variables_map &vm)
         logger(INFO, YELLOW) << "Optimizing finished." << ENDL;
 
         if (!(command_line::has_arg(vm, arg_address))) {
-            std::cout << "============== SUMMARY =============" << ENDL;
-            if (command_line::has_arg(vm, arg_preview)) {
-                std::cout << "   Optimizable wallets     : " << optimized << ENDL;
-                std::cout << "   Non optimizable wallets : " << notOptimized << ENDL;
-            } else {
-                std::cout << "   Wallets optimized       : " << optimized << ENDL;
-                std::cout << "   Wallets not optimized   : " << notOptimized << ENDL;
-            }
-            std::cout << "   Scanned wallets         : " << processed << ENDL;
-            std::cout << "   Total of wallets found  : " << addresses.size() << ENDL;
-            std::cout << "   Processing time (sec)   : "
-                      << std::chrono::duration_cast<std::chrono::seconds>(dur).count() << ENDL;
-            std::cout << "====================================" << ENDL;
+            std::cout   << "============== SUMMARY =============" << ENDL;
+        if (command_line::has_arg(vm, arg_preview)) {
+            std::cout << "   Optimizable wallets     : " << optimized << ENDL;
+            std::cout << "   Non optimizable wallets : " << notOptimized << ENDL;
+        } else {
+            std::cout << "   Wallets optimized       : " << optimized << ENDL;
+            std::cout << "   Wallets not optimized   : " << notOptimized << ENDL;
+        }
+            std::cout   << "   Scanned wallets         : " << processed << ENDL;
+            std::cout   << "   Total of wallets found  : " << addresses.size() << ENDL;
+            std::cout   << "   Processing time (sec)   : " << std::chrono::duration_cast<std::chrono::seconds>(dur).count() << ENDL;
+            std::cout   << "====================================" << ENDL;
         }
         return true;
     } else {
@@ -379,23 +357,23 @@ int main(int argc, char *argv[])
 
     po::variables_map vm;
     bool r = command_line::handle_error_helper(desc_all, [&]() {
-        po::store(command_line::parse_command_line(argc, argv, desc_general, true), vm);
-        if (command_line::get_arg(vm, command_line::arg_help)) {
-            std::cout << getProjectCLIHeader() << ENDL
-                      << "Optimizer Copyright (C) 2019 Helder Garcia <helder.garcia@gmail.com>"
-                      << ENDL << desc_all << ENDL;
+    po::store(command_line::parse_command_line(argc, argv, desc_general, true), vm);
+    if (command_line::get_arg(vm, command_line::arg_help)) {
+        std::cout
+            << getProjectCLIHeader() << ENDL
+            << "Optimizer Copyright (C) 2019 Helder Garcia <helder.garcia@gmail.com>" << ENDL
+            << desc_all << ENDL;
 
-            return false;
-        }
+        return false;
+    }
 
-        po::store(command_line::parse_command_line(argc, argv, desc_params, false), vm);
-        po::notify(vm);
+    po::store(command_line::parse_command_line(argc, argv, desc_params, false), vm);
+    po::notify(vm);
 
-        return true;
+    return true;
     });
 
-    if (!r)
-        return 1;
+    if (!r) return 1;
 
     return run_optimizer(vm) ? 0 : 1;
 }

@@ -39,6 +39,7 @@
 #include <CryptoNoteCore/ITransactionValidator.h>
 #include <CryptoNoteCore/ITxPoolObserver.h>
 #include <CryptoNoteCore/VerificationContext.h>
+#include <CryptoNoteCore/LMDB/BlockchainDB.h>
 #include <Logging/LoggerRef.h>
 
 namespace CryptoNote {
@@ -81,7 +82,92 @@ using namespace boost::multi_index;
 class tx_memory_pool: boost::noncopyable
 {
 public:
-        struct TransactionCheckInfo
+    tx_memory_pool(
+            std::unique_ptr<BlockchainDB> &mDb,
+            const CryptoNote::Currency &currency,
+            CryptoNote::ITransactionValidator &validator,
+            CryptoNote::ICore &core,
+            CryptoNote::ITimeProvider &timeProvider,
+            Logging::ILogger &log,
+            bool blockchainIndexesEnabled);
+
+    bool addObserver(ITxPoolObserver *observer);
+    bool removeObserver(ITxPoolObserver *observer);
+
+    // load/store operations
+    bool init(const std::string &config_folder);
+    bool deinit();
+
+    bool have_tx(const Crypto::Hash &id) const;
+    bool add_tx(
+            const Transaction &tx,
+            const Crypto::Hash &id,
+            size_t blobSize,
+            tx_verification_context &tvc,
+            bool keeped_by_block,
+            BlockchainDB &mDb);
+    bool add_tx(const Transaction &tx,
+                tx_verification_context& tvc,
+                bool keeped_by_block,
+                BlockchainDB &mDb);
+    bool take_tx(const Crypto::Hash &id, Transaction &tx, size_t &blobSize, uint64_t &fee);
+
+    bool on_blockchain_inc(uint64_t new_block_height, const Crypto::Hash &top_block_id);
+    bool on_blockchain_dec(uint64_t new_block_height, const Crypto::Hash &top_block_id);
+
+    void lock() const;
+    void unlock() const;
+    std::unique_lock<std::recursive_mutex> obtainGuard() const;
+
+    bool fill_block_template(
+            Block &bl,
+            size_t median_size,
+            size_t maxCumulativeSize,
+            uint64_t already_generated_coins,
+            size_t &total_size,
+            uint64_t &fee);
+
+    void get_transactions(std::list<Transaction> &txs) const;
+    void get_difference(
+            const std::vector<Crypto::Hash> &known_tx_ids,
+            std::vector<Crypto::Hash> &new_tx_ids,
+            std::vector<Crypto::Hash> &deleted_tx_ids) const;
+    size_t get_transactions_count() const;
+    std::string print_pool(bool short_format) const;
+
+    void on_idle();
+
+    bool getTransactionIdsByPaymentId(
+            const Crypto::Hash &paymentId,
+            std::vector<Crypto::Hash> &transactionIds);
+    bool getTransactionIdsByTimestamp(
+            uint64_t timestampBegin,
+            uint64_t timestampEnd,
+            uint32_t transactionsNumberLimit,
+            std::vector<Crypto::Hash> &hashes,
+            uint64_t &transactionsNumberWithinTimestamps);
+
+    template<class T, class D, class S>
+    void getTransactions(const T &txsIds, D &txs, S &missedTxs)
+    {
+        std::lock_guard<std::recursive_mutex> lock(m_transactions_lock);
+
+        for (const auto &id : txsIds) {
+            auto it = m_transactions.find(id);
+            if (it == m_transactions.end()) {
+                missedTxs.push_back(id);
+            } else {
+                txs.push_back(it->tx);
+            }
+        }
+    }
+
+    void serialize(ISerializer &s);
+    void get_transactions(std::list<Transaction> &txs,
+                          bool includeUnrelayedTxes,
+                          BlockchainDB &mDb) const;
+
+    struct TransactionCheckInfo
     {
         BlockInfo maxUsedBlock;
         BlockInfo lastFailedBlock;
@@ -96,6 +182,9 @@ public:
         bool keptByBlock;
         time_t receiveTime;
     };
+
+    void getMemoryPool(std::list<CryptoNote::tx_memory_pool::TransactionDetails> txs) const;
+    std::list<CryptoNote::tx_memory_pool::TransactionDetails> getMemoryPool() const;
 
 private:
     struct TransactionPriorityComparator
@@ -132,88 +221,6 @@ private:
     typedef std::set<GlobalOutput> GlobalOutputsContainer;
     typedef std::unordered_map<Crypto::KeyImage, std::unordered_set<Crypto::Hash> > key_images_container;
 
-public:
-    tx_memory_pool(
-        const CryptoNote::Currency &currency,
-        CryptoNote::ITransactionValidator &validator,
-        CryptoNote::ICore &core,
-        CryptoNote::ITimeProvider &timeProvider,
-        Logging::ILogger &log,
-        bool blockchainIndexesEnabled);
-
-    bool addObserver(ITxPoolObserver *observer);
-    bool removeObserver(ITxPoolObserver *observer);
-
-    // load/store operations
-    bool init(const std::string &config_folder);
-    bool deinit();
-
-    bool have_tx(const Crypto::Hash &id) const;
-    bool add_tx(
-        const Transaction &tx,
-        const Crypto::Hash &id,
-        size_t blobSize,
-        tx_verification_context &tvc,
-        bool keeped_by_block);
-    bool add_tx(const Transaction &tx, tx_verification_context& tvc, bool keeped_by_block);
-    bool take_tx(const Crypto::Hash &id, Transaction &tx, size_t &blobSize, uint64_t &fee);
-
-    bool on_blockchain_inc(uint64_t new_block_height, const Crypto::Hash &top_block_id);
-    bool on_blockchain_dec(uint64_t new_block_height, const Crypto::Hash &top_block_id);
-
-    void lock() const;
-    void unlock() const;
-    std::unique_lock<std::recursive_mutex> obtainGuard() const;
-
-    bool fill_block_template(
-        Block &bl,
-        size_t median_size,
-        size_t maxCumulativeSize,
-        uint64_t already_generated_coins,
-        size_t &total_size,
-        uint64_t &fee);
-
-    void get_transactions(std::list<Transaction> &txs) const;
-    void get_difference(
-        const std::vector<Crypto::Hash> &known_tx_ids,
-        std::vector<Crypto::Hash> &new_tx_ids,
-        std::vector<Crypto::Hash> &deleted_tx_ids) const;
-    size_t get_transactions_count() const;
-    std::string print_pool(bool short_format) const;
-
-    void on_idle();
-
-    bool getTransactionIdsByPaymentId(
-        const Crypto::Hash &paymentId,
-        std::vector<Crypto::Hash> &transactionIds);
-    bool getTransactionIdsByTimestamp(
-        uint64_t timestampBegin,
-        uint64_t timestampEnd,
-        uint32_t transactionsNumberLimit,
-        std::vector<Crypto::Hash> &hashes,
-        uint64_t &transactionsNumberWithinTimestamps);
-
-    template<class T, class D, class S>
-    void getTransactions(const T &txsIds, D &txs, S &missedTxs)
-    {
-        std::lock_guard<std::recursive_mutex> lock(m_transactions_lock);
-
-        for (const auto &id : txsIds) {
-            auto it = m_transactions.find(id);
-            if (it == m_transactions.end()) {
-                missedTxs.push_back(id);
-            } else {
-                txs.push_back(it->tx);
-            }
-        }
-    }
-
-    void serialize(ISerializer &s);
-
-	void getMemoryPool(std::list<CryptoNote::tx_memory_pool::TransactionDetails> txs) const;
-	std::list<CryptoNote::tx_memory_pool::TransactionDetails> getMemoryPool() const;
-
-private:
     // double spending checking
     bool addTransactionInputs(const Crypto::Hash &id, const Transaction &tx, bool keptByBlock);
     bool haveSpentInputs(const Transaction &tx) const;
@@ -242,7 +249,7 @@ private:
     std::unordered_map<Crypto::Hash, uint64_t> m_recentlyDeletedTransactions;
 
     Logging::LoggerRef logger;
-
+    std::unique_ptr<BlockchainDB> &mDb;
     PaymentIdIndex m_paymentIdIndex;
     TimestampTransactionsIndex m_timestampIndex;
     std::unordered_map<Crypto::Hash, uint64_t> m_ttlIndex;

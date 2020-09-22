@@ -59,10 +59,7 @@ class NodeRpcProxy : public CryptoNote::INode
     };
 
 public:
-    NodeRpcProxy(const std::string &nodeHost,
-                 unsigned short nodePort,
-                 const std::string &daemonPath,
-                 const bool &daemonSSL);
+    NodeRpcProxy(const std::string &nodeHost, unsigned short nodePort);
     ~NodeRpcProxy() override;
 
     void init(const Callback &callback) override;
@@ -143,13 +140,8 @@ public:
     unsigned int rpcTimeout() const { return m_rpcTimeout; }
     void rpcTimeout(unsigned int val) { m_rpcTimeout = val; }
 
-    const std::string m_daemonPath;
     const std::string m_nodeHost;
     const unsigned short m_nodePort;
-    const bool m_daemonSSL;
-
-    virtual void setRootCert(const std::string &path) override;
-    virtual void disableVerify() override;
 
 private:
     void resetInternalState();
@@ -224,8 +216,6 @@ private:
     std::unordered_set<Crypto::Hash> m_knownTxs;
 
     bool m_connected;
-    std::string m_daemon_cert;
-    bool m_daemon_no_verify;
 };
 
 } // namespace CryptoNote

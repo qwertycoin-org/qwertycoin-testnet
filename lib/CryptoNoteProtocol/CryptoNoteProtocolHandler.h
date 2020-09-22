@@ -19,13 +19,18 @@
 #pragma once
 
 #include <atomic>
+
 #include <Common/ObserverManager.h>
+
 #include <CryptoNoteCore/ICore.h>
+
 #include <CryptoNoteProtocol/CryptoNoteProtocolDefinitions.h>
 #include <CryptoNoteProtocol/CryptoNoteProtocolHandlerCommon.h>
 #include <CryptoNoteProtocol/ICryptoNoteProtocolObserver.h>
 #include <CryptoNoteProtocol/ICryptoNoteProtocolQuery.h>
+
 #include <Logging/LoggerRef.h>
+
 #include <P2p/P2pProtocolDefinitions.h>
 #include <P2p/NetNodeCommon.h>
 #include <P2p/ConnectionContext.h>

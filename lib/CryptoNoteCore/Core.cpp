@@ -19,13 +19,19 @@
 
 #include <sstream>
 #include <unordered_set>
+
+#include <boost/algorithm/string.hpp>
+#include <boost/filesystem.hpp>
 #include <boost/utility/value_init.hpp>
 #include <boost/range/combine.hpp>
+
 #include <Common/CommandLine.h>
 #include <Common/Math.h>
 #include <Common/StringTools.h>
 #include <Common/Util.h>
+
 #include <crypto/crypto.h>
+
 #include <CryptoNoteCore/Core.h>
 #include <CryptoNoteCore/CoreConfig.h>
 #include <CryptoNoteCore/CryptoNoteFormatUtils.h>
@@ -34,15 +40,20 @@
 #include <CryptoNoteCore/IBlock.h>
 #include <CryptoNoteCore/Miner.h>
 #include <CryptoNoteCore/TransactionExtra.h>
+#include <CryptoNoteCore/LMDB/BlockchainDB.h>
+
 #include <CryptoNoteProtocol/CryptoNoteProtocolDefinitions.h>
+
 #include <Global/CryptoNoteConfig.h>
+
 #include <Logging/LoggerRef.h>
+
 #include <Rpc/CoreRpcServerCommandsDefinitions.h>
 
 #undef ERROR
 
 using namespace Logging;
-using namespace  Common;
+using namespace Common;
 using namespace Qwertycoin;
 
 namespace CryptoNote {
@@ -74,14 +85,17 @@ private:
 };
 
 core::core(
+    std::unique_ptr<BlockchainDB> &db,
+    Hardfork *hf,
     const Currency &currency,
     i_cryptonote_protocol *pprotocol,
     Logging::ILogger &logger,
     bool blockchainIndexesEnabled)
-    : m_currency(currency),
+    : mDb(),
+      m_currency(currency),
       logger(logger, "core"),
-      m_mempool(currency, m_blockchain, *this, m_timeProvider, logger, blockchainIndexesEnabled),
-      m_blockchain(currency, m_mempool, logger, blockchainIndexesEnabled),
+      m_mempool(db, currency, m_blockchain, *this, m_timeProvider, logger, blockchainIndexesEnabled),
+      m_blockchain(db, hf, currency, m_mempool, logger, blockchainIndexesEnabled),
       m_miner(new miner(currency, *this, logger)),
       m_starter_message_showed(false)
 {
@@ -116,6 +130,9 @@ void core::init_options(boost::program_options::options_description &desc)
 bool core::handle_command_line(const boost::program_options::variables_map &vm)
 {
     m_config_folder = command_line::get_arg(vm, command_line::arg_data_dir);
+    dbSyncMode = command_line::get_arg(vm, command_line::arg_db_sync_mode);
+    mDbType = command_line::get_arg(vm, command_line::arg_db_type);
+
     return true;
 }
 
@@ -126,8 +143,16 @@ uint32_t core::get_current_blockchain_height()
 
 uint8_t core::getCurrentBlockMajorVersion()
 {
-    assert(m_blockchain.getCurrentBlockchainHeight() > 0);
+    if (m_blockchain.getCurrentBlockchainHeight() < 1) {
+        return 1;
+    }
+
     return m_blockchain.getBlockMajorVersionForHeight(m_blockchain.getCurrentBlockchainHeight());
+}
+
+bool core::storeBlockchain()
+{
+    return m_blockchain.storeBlockchain();
 }
 
 uint8_t core::getBlockMajorVersionForHeight(uint32_t height)
@@ -138,8 +163,12 @@ uint8_t core::getBlockMajorVersionForHeight(uint32_t height)
 
 void core::get_blockchain_top(uint32_t &height, Crypto::Hash &top_id)
 {
-    assert(m_blockchain.getCurrentBlockchainHeight() > 0);
-    top_id = m_blockchain.getTailId(height);
+    height = m_blockchain.getCurrentBlockchainHeight();
+    if (!m_blockchain.getCurrentBlockchainHeight()) {
+        top_id = NULL_HASH;
+    } else {
+        top_id = m_blockchain.getTailId(height);
+    }
 }
 
 bool core::get_blocks(
@@ -170,6 +199,11 @@ bool core::get_alternative_blocks(std::list<Block> &blocks)
     return m_blockchain.getAlternativeBlocks(blocks);
 }
 
+void core::safeSyncMode(const bool onoff)
+{
+    m_blockchain.safeSyncMode(onoff);
+}
+
 size_t core::get_alternative_blocks_count()
 {
     return m_blockchain.getAlternativeBlocksCount();
@@ -184,13 +218,109 @@ bool core::init(const CoreConfig &config, const MinerConfig &minerConfig, bool l
 {
     m_config_folder = config.configFolder;
     bool r = m_mempool.init(m_config_folder);
-    if (!(r)) {
+    if (!r) {
         logger(ERROR, BRIGHT_RED) << "Failed to initialize memory pool";
         return false;
     }
 
-    r = m_blockchain.init(m_config_folder, load_existing);
-    if (!(r)) {
+    boost::filesystem::path folder(m_config_folder);
+
+    // make sure the data directory exists, and try to lock it
+    bool z = boost::filesystem::exists(folder) || boost::filesystem::create_directories(folder);
+    assert(z == true);
+    if (!z) {
+        logger(ERROR, BRIGHT_RED) << "Failed to create directory!";
+    }
+
+    // check for blockchain.bin
+    try {
+        const boost::filesystem::path oldFiles = folder;
+        if (boost::filesystem::exists(oldFiles / "blockindexes.bin")) {
+            logger(ERROR, BRIGHT_RED) << "Found old-style blockchain.bin in " << oldFiles.string();
+            logger(ERROR, BRIGHT_RED) << "Qwertycoin now uses a new format. Remove blockchain.bin to start syncing";
+
+            return false;
+        } else {
+            mDbType = config.dbType;
+            dbSyncMode = config.dbSyncMode;
+        }
+    } catch (std::exception &e) {
+        logger(ERROR, BRIGHT_RED) << "Exception caught in Core init: " << e.what();
+    }
+
+    std::unique_ptr<BlockchainDB> db(newDB(config.dbType));
+
+    if (config.dbType == "lmdb") {
+        folder / db->getDBName();
+    }
+
+    logger(INFO, WHITE) << "Loading blockchain from folder " << folder.string() << " ...";
+
+    BlockchainDBSyncMode syncMode = db_default_sync;
+    uint64_t blocksPerSync = 1;
+
+    uint64_t dbFlags = 0;
+
+    const std::string filename = folder.string();
+
+    if (config.dbType == "lmdb") {
+        // default to fast:async:1
+
+        try {
+            std::vector<std::string> options;
+            dbSyncMode = Tools::getDefaultDBSyncMode();
+
+            boost::trim(dbSyncMode);
+            boost::split(options, dbSyncMode, boost::is_any_of(" :"));
+
+            uint64_t DEFAULT_FLAGS = DBF_FAST;
+
+            if (options.size() == 0) {
+                dbFlags = DEFAULT_FLAGS;
+            }
+
+            bool safeMode = false;
+            if (options.size() >= 1) {
+                if (options[0] == "safe") {
+                    safeMode = true;
+                    dbFlags = DBF_SAFE;
+                    syncMode = db_nosync;
+                } else if (options[0] == "fast") {
+                    dbFlags = DBF_FAST;
+                    syncMode = db_async;
+                } else if (options[0] == "fastest") {
+                    dbFlags = DBF_FASTEST;
+                    blocksPerSync = 1000;
+                    syncMode = db_async;
+                } else {
+                    dbFlags = DEFAULT_FLAGS;
+                }
+            }
+
+            if (options.size() >= 2 && !safeMode) {
+                if (options[1] == "sync") {
+                    syncMode = db_sync;
+                } else if (options[1] == "async") {
+                    syncMode = db_async;
+                }
+            }
+
+            if (options.size() >= 3 && !safeMode) {
+                char *endPtr;
+                uint64_t bps = strtoull(options[2].c_str(), &endPtr, 0);
+                if (*endPtr == '\0') {
+                    blocksPerSync = bps;
+                }
+            }
+        } catch (const DB_ERROR &e) {
+            logger(ERROR, BRIGHT_RED) << "Error opening database: " << e.what();
+
+            return false;
+        }
+    }
+
+    r = m_blockchain.init(folder.string(), config.dbType, dbFlags, load_existing);
+    if (!r) {
         logger(ERROR, BRIGHT_RED) << "Failed to initialize blockchain storage";
         return false;
     }
@@ -228,6 +358,13 @@ bool core::deinit()
 
 size_t core::addChain(const std::vector<const IBlock *> &chain)
 {
+    return addChain(chain, m_blockchain.getDb());
+}
+
+size_t core::addChain(const std::vector<const IBlock *> &chain, BlockchainDB &db)
+{
+    bool r = Tools::getDefaultDBType() != "lmdb";
+
     size_t blocksCounter = 0;
 
     for (const IBlock *block : chain) {
@@ -247,15 +384,16 @@ size_t core::addChain(const std::vector<const IBlock *> &chain)
                     tvc,
                     true,
                     get_block_height(block->getBlock()),
-                    true)
-                ) {
+                    true,
+                    db)
+                    ) {
                 logger(ERROR, BRIGHT_RED)
-                    << "core::addChain() failed to handle transaction "
-                    << txHash
-                    << " from block "
-                    << blocksCounter
-                    << "/"
-                    << chain.size();
+                        << "core::addChain() failed to handle transaction "
+                        << txHash
+                        << " from block "
+                        << blocksCounter
+                        << "/"
+                        << chain.size();
                 allTransactionsAdded = false;
                 break;
             }
@@ -266,15 +404,20 @@ size_t core::addChain(const std::vector<const IBlock *> &chain)
         }
 
         block_verification_context bvc = boost::value_initialized<block_verification_context>();
-        m_blockchain.addNewBlock(block->getBlock(), bvc);
+        if (r) {
+            m_blockchain.addNewBlock(block->getBlock(), bvc);
+        } else {
+            m_blockchain.addNewBlockLMDB(block->getBlock(), bvc);
+        }
+
         if (bvc.m_marked_as_orphaned || bvc.m_verification_failed) {
             logger(ERROR, BRIGHT_RED)
-                << "core::addChain() failed to handle incoming block "
-                << get_block_hash(block->getBlock())
-                << ", "
-                << blocksCounter
-                << "/"
-                << chain.size();
+                    << "core::addChain() failed to handle incoming block "
+                    << get_block_hash(block->getBlock())
+                    << ", "
+                    << blocksCounter
+                    << "/"
+                    << chain.size();
             break;
         }
 
@@ -291,6 +434,15 @@ bool core::handle_incoming_tx(
     tx_verification_context &tvc,
     bool keeped_by_block,
     bool loose_check)
+{
+    return handle_incoming_tx(tx_blob, tvc, keeped_by_block, loose_check,m_blockchain.getDb());
+}
+
+bool core::handle_incoming_tx(const BinaryArray &tx_blob,
+                              tx_verification_context &tvc,
+                              bool keeped_by_block,
+                              bool loose_check,
+                              BlockchainDB &db)
 {
     tvc = boost::value_initialized<tx_verification_context>();
     // want to process all transactions sequentially
@@ -319,13 +471,13 @@ bool core::handle_incoming_tx(
         blockHeight = this->get_current_blockchain_height();
     }
     return handleIncomingTransaction(
-        tx,
-        tx_hash,
-        tx_blob.size(),
-        tvc,
-        keeped_by_block,
-        blockHeight,
-        loose_check
+            tx,
+            tx_hash,
+            tx_blob.size(),
+            tvc,
+            keeped_by_block,
+            blockHeight,
+            loose_check
     );
 }
 
@@ -413,7 +565,12 @@ bool core::check_tx_fee(
             ttl.ttl = 0;
 
             // TODO: simplify overcomplicated expression.
-            if (height < CryptoNote::parameters::MINIMUM_FEE_V2_HEIGHT ? fee < CryptoNote::parameters::MINIMUM_FEE_V1 : (getBlockMajorVersionForHeight(height) < BLOCK_MAJOR_VERSION_6 ? fee < m_currency.minimumFee() : fee < getMinimalFeeForHeight(loose_check ? height - CryptoNote::parameters::EXPECTED_NUMBER_OF_BLOCKS_PER_DAY : height))) {
+            if (height < CryptoNote::parameters::MINIMUM_FEE_V2_HEIGHT ?
+                fee < CryptoNote::parameters::MINIMUM_FEE_V1 :
+                    (getBlockMajorVersionForHeight(height) < BLOCK_MAJOR_VERSION_6 ?
+                fee < m_currency.minimumFee() :
+                fee < getMinimalFeeForHeight(loose_check ?
+                height - CryptoNote::parameters::EXPECTED_NUMBER_OF_BLOCKS_PER_DAY : height))) {
                 if (height < CryptoNote::parameters::MINIMUM_FEE_V0_HEIGHT) {
                     // We changed the minimum fee to a higher one (0.01 -> 1 QWC in the past to fix some floods)
                     // Now we have to fix this in a future PR with a proper fee check
@@ -424,7 +581,10 @@ bool core::check_tx_fee(
                         << m_currency.formatAmount(fee)
                         << ", minimum fee: "
                         // TODO: simplify overcomplicated expression.
-                        << m_currency.formatAmount(getBlockMajorVersionForHeight(height) < BLOCK_MAJOR_VERSION_6 ? m_currency.minimumFee() : getMinimalFeeForHeight(loose_check ? height - CryptoNote::parameters::EXPECTED_NUMBER_OF_BLOCKS_PER_DAY : height));
+                        << m_currency.formatAmount(getBlockMajorVersionForHeight(height) <
+                                                   BLOCK_MAJOR_VERSION_6 ? m_currency.minimumFee() :
+                                                   getMinimalFeeForHeight(loose_check ?
+                                                   height - CryptoNote::parameters::EXPECTED_NUMBER_OF_BLOCKS_PER_DAY : height));
 
                     tvc.m_verification_failed = true;
                     tvc.m_tx_fee_too_small = true;
@@ -610,6 +770,16 @@ bool core::add_new_tx(
     tx_verification_context &tvc,
     bool keeped_by_block)
 {
+    return add_new_tx(tx, tx_hash, blob_size, tvc, keeped_by_block, m_blockchain.getDb());
+}
+
+bool core::add_new_tx(const Transaction &tx,
+                      const Crypto::Hash &tx_hash,
+                      size_t blob_size,
+                      tx_verification_context &tvc,
+                      bool keeped_by_block,
+                      BlockchainDB &db)
+{
     // Locking on m_mempool and m_blockchain closes possibility to add tx
     // to memory pool which is already in blockchain
     std::lock_guard<decltype(m_mempool)> lk(m_mempool);
@@ -625,7 +795,7 @@ bool core::add_new_tx(
         return true;
     }
 
-    return m_mempool.add_tx(tx, tx_hash, blob_size, tvc, keeped_by_block);
+    return m_mempool.add_tx(tx, tx_hash, blob_size, tvc, keeped_by_block, db);
 }
 
 bool core::get_block_template(
@@ -735,7 +905,7 @@ bool core::get_block_template(
     uint32_t previousBlockHeight = 0;
     uint64_t blockTarget = CryptoNote::parameters::DIFFICULTY_TARGET;
 
-    if (height >= CryptoNote::parameters::UPGRADE_HEIGHT_REWARD_SCHEME) {
+    if (height >= CryptoNote::parameters::UPGRADE_HEIGHT_V6) {
         getBlockHeight(b.previousBlockHash, previousBlockHeight);
         uint64_t prev_timestamp = getBlockTimestamp(previousBlockHeight);
         if(prev_timestamp >= b.timestamp) {
@@ -923,7 +1093,7 @@ void core::update_block_template_and_resume_mining()
 bool core::handle_block_found(Block &b)
 {
     block_verification_context bvc = boost::value_initialized<block_verification_context>();
-    handle_incoming_block(b, bvc, true, true);
+    handleBlockFound(b);
 
     if (bvc.m_verification_failed) {
         logger(ERROR) << "mined block failed verification";
@@ -1006,12 +1176,13 @@ bool core::handle_incoming_block_blob(
         return false;
     }
 
-    return handle_incoming_block(b, bvc, control_miner, relay_block);
+    return handle_incoming_block(b, bvc, m_blockchain.getDb(), control_miner, relay_block);
 }
 
 bool core::handle_incoming_block(
     const Block &b,
     block_verification_context &bvc,
+    BlockchainDB &db,
     bool control_miner,
     bool relay_block)
 {
@@ -1019,7 +1190,35 @@ bool core::handle_incoming_block(
         pause_mining();
     }
 
-    m_blockchain.addNewBlock(b, bvc);
+    LockedBlockchainStorage lbs(m_blockchain);
+    block_complete_entry blockEntry;
+    std::vector<Transaction> txsVec;
+
+    try {
+        BlockFullInfo item;
+        item.block_id = get_block_hash(b);
+
+        std::list<Transaction> txs;
+        std::list<Crypto::Hash> missedTxs;
+        block_complete_entry &completeEntry = item;
+        m_blockchain.getTransactions(b.transactionHashes, txs, missedTxs);
+
+        completeEntry.block = asString(toBinaryArray(b));
+
+        for (auto &tx : txs) {
+            txsVec.push_back(tx);
+            completeEntry.txs.push_back(asString(toBinaryArray(tx)));
+        }
+    } catch (const std::exception &e) {
+        logger(ERROR, BRIGHT_RED) << "Something went wrong when handling incoming blocks!";
+    }
+
+    lbs->pushBlock(b, txsVec, bvc);
+    if (bvc.m_verification_failed) {
+        logger(ERROR,BRIGHT_RED) << "Error: incoming block failed verification!";
+
+        return false;
+    }
 
     if (control_miner) {
         update_block_template_and_resume_mining();
@@ -1090,6 +1289,12 @@ bool core::parse_tx_from_blob(
 
 bool core::check_tx_syntax(const Transaction &tx)
 {
+    /*!
+     * TODO: Add some code with more sense
+     * Hey its me, a bad tx
+     * nice come over with your nice syntax
+     */
+
     return true;
 }
 
@@ -1112,8 +1317,14 @@ std::list<CryptoNote::tx_memory_pool::TransactionDetails> core::getMemoryPool() 
 
 std::vector<Crypto::Hash> core::buildSparseChain()
 {
-    assert(m_blockchain.getCurrentBlockchainHeight() != 0);
-    return m_blockchain.buildSparseChain();
+    LockedBlockchainStorage lbs(m_blockchain);
+    std::vector<Crypto::Hash> chain;
+    if (m_blockchain.getCurrentBlockchainHeight() < 1) {
+        chain.push_back(m_currency.genesisBlockHash());
+
+        return chain;
+    }
+    return lbs->buildSparseChain();
 }
 
 std::vector<Crypto::Hash> core::buildSparseChain(const Crypto::Hash& startBlockId)
@@ -1286,6 +1497,7 @@ bool core::findStartAndFullOffsets(
     uint32_t &startOffset,
     uint32_t &startFullOffset)
 {
+    bool r = Tools::getDefaultDBType() != "lmdb";
     LockedBlockchainStorage lbs(m_blockchain);
 
     if (knownBlockIds.empty()) {
@@ -1300,7 +1512,18 @@ bool core::findStartAndFullOffsets(
         return false;
     }
 
-    startOffset = lbs->findBlockchainSupplement(knownBlockIds);
+    if (r) {
+        startOffset = lbs->findBlockchainSupplement(knownBlockIds);
+    } else {
+        size_t size;
+        bool find = lbs->findBlockchainSupplement(knownBlockIds, size);
+        if (!find) {
+            logger(ERROR, BRIGHT_RED) << "Failed to find blockchain supplement!";
+        } else {
+            startOffset = size;
+        }
+    }
+
     if (!lbs->getLowerBound(timestamp, startOffset, startFullOffset)) {
         startFullOffset = startOffset;
     }
@@ -1844,7 +2067,7 @@ bool core::fillBlockDetails(const Block &block, BlockDetails2 &blockDetails)
         }
     }
 
-    if (blockDetails.height >= CryptoNote::parameters::UPGRADE_HEIGHT_REWARD_SCHEME) {
+    if (blockDetails.height >= CryptoNote::parameters::UPGRADE_HEIGHT_V6) {
         getBlockHeight(block.previousBlockHash, previousBlockHeight);
         blockTarget = block.timestamp - getBlockTimestamp(previousBlockHeight);
     }
@@ -2065,11 +2288,30 @@ bool core::handleIncomingTransaction(
     uint32_t height,
     bool loose_check)
 {
-    if (!check_tx_syntax(tx)) {
+    return handleIncomingTransaction(tx,
+                                     txHash,
+                                     blobSize,
+                                     tvc,
+                                     keptByBlock,
+                                     height,
+                                     loose_check,
+                                     m_blockchain.getDb());
+}
+
+bool core::handleIncomingTransaction(const Transaction &tx,
+                                     const Crypto::Hash &txHash,
+                                     size_t blobSize,
+                                     tx_verification_context &tvc,
+                                     bool keptByBlock,
+                                     uint32_t height,
+                                     bool looseCheck,
+                                     BlockchainDB &db)
+{
+    if (!check_tx_syntax(tx)) { // <- ok, but why?
         logger(INFO)
-            << "WRONG TRANSACTION BLOB, Failed to check tx "
-            << txHash
-            << " syntax, rejected";
+                << "WRONG TRANSACTION BLOB, Failed to check tx "
+                << txHash
+                << " syntax, rejected";
         tvc.m_verification_failed = true;
         return false;
     }
@@ -2078,34 +2320,34 @@ bool core::handleIncomingTransaction(
     if (!m_blockchain.isInCheckpointZone(get_current_blockchain_height())) {
         if (blobSize > m_currency.maxTransactionSizeLimit() && getCurrentBlockMajorVersion() >= BLOCK_MAJOR_VERSION_4) {
             logger(INFO)
-                << "Transaction verification failed: too big size "
-                << blobSize
-                << " of transaction "
-                << txHash
-                << ", rejected";
+                    << "Transaction verification failed: too big size "
+                    << blobSize
+                    << " of transaction "
+                    << txHash
+                    << ", rejected";
             tvc.m_verification_failed = true;
             return false;
         }
 
-        if (!check_tx_fee(tx, blobSize, tvc, height, loose_check)) {
+        if (!check_tx_fee(tx, blobSize, tvc, height, looseCheck)) {
             tvc.m_verification_failed = true;
             return false;
         }
 
         if (!check_tx_mixin(tx, height)) {
             logger(INFO)
-                << "Transaction verification failed: mixin count for transaction "
-                << txHash
-                << " is too large, rejected";
+                    << "Transaction verification failed: mixin count for transaction "
+                    << txHash
+                    << " is too large, rejected";
             tvc.m_verification_failed = true;
             return false;
         }
 
         if (!check_tx_unmixable(tx, height)) {
             logger(ERROR)
-                << "Transaction verification failed: unmixable output for transaction "
-                << txHash
-                << ", rejected";
+                    << "Transaction verification failed: unmixable output for transaction "
+                    << txHash
+                    << ", rejected";
             tvc.m_verification_failed = true;
             return false;
         }
@@ -2121,17 +2363,23 @@ bool core::handleIncomingTransaction(
     if (tvc.m_verification_failed) {
         if (!tvc.m_tx_fee_too_small) {
             logger(ERROR) << "Transaction verification failed: " << txHash;
+            return false;
         } else {
             logger(INFO) << "Transaction verification failed: " << txHash;
+            return false;
         }
     } else if (tvc.m_verifivation_impossible) {
         logger(ERROR) << "Transaction verification impossible: " << txHash;
+        return false;
     }
 
     if (tvc.m_added_to_pool) {
         logger(DEBUGGING) << "tx added: " << txHash;
+        tvc.m_verification_failed = false;
         poolUpdated();
     }
+
+    tvc.m_verification_failed = false;
 
     return r;
 }
@@ -2196,6 +2444,44 @@ void core::rollbackBlockchain(uint32_t height)
 {
     logger(INFO, BRIGHT_YELLOW) << "Rewinding blockchain to height: " << height;
     m_blockchain.rollbackBlockchainTo(height);
+}
+
+bool core::handleBlockFound(Block &b)
+{
+    LockedBlockchainStorage lbs(m_blockchain);
+    block_verification_context bvc = boost::value_initialized<block_verification_context>();
+    m_miner->pause();
+
+    std::list<block_complete_entry> blocks;
+    std::list<Transaction> txs;
+    std::vector<Transaction> txsVec;
+    std::list<Crypto::Hash> missedTxs;
+    lbs->getTransactions(b.transactionHashes, txs, missedTxs);
+    block_complete_entry completeEntry;
+
+    try {
+        BlockFullInfo item;
+
+        item.block_id = get_block_hash(b);
+
+        completeEntry.block = asString(toBinaryArray(b));
+        for (auto &tx : txs) {
+            txsVec.push_back(tx);
+            completeEntry.txs.push_back(asString(toBinaryArray(tx)));
+        }
+    } catch (const std::exception &e) {
+        logger(ERROR, BRIGHT_RED) << "Something went wrong at handleBlockFound!";
+    }
+
+    lbs->pushBlock(b, txsVec, bvc);
+    update_miner_block_template();
+    m_miner->resume();
+
+    if (bvc.m_verification_failed) {
+        logger(ERROR,BRIGHT_RED) << "Error: mined block failed verification!";
+    }
+
+    return bvc.m_added_to_main_chain;
 }
 
 } // namespace CryptoNote
