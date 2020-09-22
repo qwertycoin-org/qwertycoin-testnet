@@ -32,6 +32,7 @@ if(WIN32)
 endif()
 
 set(QwertycoinTools_ConnectivityTool_LIBS
+    Boost::system
     Boost::program_options
     QwertycoinFramework::Breakpad
     QwertycoinFramework::Common
@@ -44,6 +45,12 @@ set(QwertycoinTools_ConnectivityTool_LIBS
 
 if(WIN32)
     list(APPEND QwertycoinTools_ConnectivityTool_LIBS ws2_32)
+endif()
+
+if (BUILD_WITH_SSL)
+    list(APPEND QwertycoinTools_ConnectivityTool_LIBS
+            OpenSSL::SSL
+            OpenSSL::Crypto)
 endif()
 
 add_executable(QwertycoinTools_ConnectivityTool ${QwertycoinTools_ConnectivityTool_SOURCES})
@@ -67,7 +74,11 @@ if(WIN32)
 endif()
 
 set(QwertycoinTools_Daemon_LIBS
+    Boost::atomic
     Boost::filesystem
+    Boost::regex
+    Boost::system
+    Boost::thread
     QwertycoinFramework::Breakpad
     QwertycoinFramework::Common
     QwertycoinFramework::CryptoNoteCore
@@ -78,6 +89,12 @@ set(QwertycoinTools_Daemon_LIBS
     QwertycoinFramework::Serialization
     QwertycoinFramework::System
 )
+
+if (BUILD_WITH_SSL)
+    list(APPEND QwertycoinTools_Daemon_LIBS
+            OpenSSL::SSL
+            OpenSSL::Crypto)
+endif()
 
 add_executable(QwertycoinTools_Daemon ${QwertycoinTools_Daemon_SOURCES})
 add_executable(QwertycoinTools::Daemon ALIAS QwertycoinTools_Daemon)
@@ -121,6 +138,12 @@ if(WIN32)
     list(APPEND QwertycoinTools_Miner_LIBS ws2_32)
 endif()
 
+if (BUILD_WITH_SSL)
+    list(APPEND QwertycoinTools_Miner_LIBS
+            OpenSSL::SSL
+            OpenSSL::Crypto)
+endif()
+
 add_executable(QwertycoinTools_Miner ${QwertycoinTools_Miner_SOURCES})
 add_executable(QwertycoinTools::Miner ALIAS QwertycoinTools_Miner)
 target_include_directories(QwertycoinTools_Miner PRIVATE ${QwertycoinTools_INCLUDE_DIRS})
@@ -156,6 +179,12 @@ if(WIN32)
     list(APPEND QwertycoinTools_Optimizer_LIBS ws2_32)
 endif()
 
+if (BUILD_WITH_SSL)
+    list(APPEND QwertycoinTools_Optimizer_LIBS
+            OpenSSL::SSL
+            OpenSSL::Crypto)
+endif()
+
 add_executable(QwertycoinTools_Optimizer ${QwertycoinTools_Optimizer_SOURCES})
 add_executable(QwertycoinTools::Optimizer ALIAS QwertycoinTools_Optimizer)
 target_include_directories(QwertycoinTools_Optimizer PRIVATE ${QwertycoinTools_INCLUDE_DIRS})
@@ -185,6 +214,7 @@ endif()
 set(QwertycoinTools_PaymentGateService_LIBS
     Boost::filesystem
     Boost::program_options
+    Boost::system
     QwertycoinFramework::Breakpad
     QwertycoinFramework::Common
     QwertycoinFramework::CryptoNoteCore
@@ -194,6 +224,12 @@ set(QwertycoinTools_PaymentGateService_LIBS
     QwertycoinFramework::Rpc
     QwertycoinFramework::System
 )
+
+if (BUILD_WITH_SSL)
+    list(APPEND QwertycoinTools_PaymentGateService_LIBS
+            OpenSSL::SSL
+            OpenSSL::Crypto)
+endif()
 
 add_executable(QwertycoinTools_PaymentGateService ${QwertycoinTools_PaymentGateService_SOURCES})
 add_executable(QwertycoinTools::PaymentGateService ALIAS QwertycoinTools_PaymentGateService)
@@ -231,6 +267,12 @@ set(QwertycoinTools_SimpleWallet_LIBS
 
 if(WIN32)
     list(APPEND QwertycoinTools_SimpleWallet_LIBS ws2_32)
+endif()
+
+if (BUILD_WITH_SSL)
+    list(APPEND QwertycoinTools_SimpleWallet_LIBS
+            OpenSSL::SSL
+            OpenSSL::Crypto)
 endif()
 
 add_executable(QwertycoinTools_SimpleWallet ${QwertycoinTools_SimpleWallet_SOURCES})

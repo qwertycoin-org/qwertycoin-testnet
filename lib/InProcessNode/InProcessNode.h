@@ -116,6 +116,9 @@ public:
                              const Callback &callback) override;
     void isSynchronized(bool &syncStatus, const Callback &callback) override;
 
+    virtual void setRootCert(const std::string &path) override;
+    virtual void disableVerify() override;
+
     InProcessNode &operator=(const InProcessNode &) = delete;
     InProcessNode &operator=(InProcessNode &&) = delete;
 
@@ -226,6 +229,7 @@ private:
                                                  std::vector<TransactionDetails> &transactions);
 
     void isSynchronizedAsync(bool& syncStatus, const Callback& callback);
+
 
     void workerFunc();
     bool doShutdown();
